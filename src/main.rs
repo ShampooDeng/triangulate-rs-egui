@@ -74,14 +74,14 @@ use eframe::egui::*;
 #[cfg_attr(feature = "serde", serde(default))]
 pub struct Painting {
     /// in 0-1 normalized coordinates
-    lines: Vec<Vec<Pos2>>,
+    points: Vec<Pos2>,
     stroke: Stroke,
 }
 
 impl Default for Painting {
     fn default() -> Self {
         Self {
-            lines: Default::default(),
+            points: Default::default(),
             stroke: Stroke::new(1.0, Color32::from_rgb(25, 200, 100)),
         }
     }
@@ -91,11 +91,10 @@ impl Painting {
     pub fn ui_control(&mut self, ui: &mut egui::Ui) -> egui::Response {
         ui.horizontal(|ui| {
             ui.label("Stroke:");
-            // ui.add(&mut self.stroke);
             egui::stroke_ui(ui, &mut self.stroke, "nihao");
             ui.separator();
             if ui.button("Clear Painting").clicked() {
-                self.lines.clear();
+                self.points.clear();
             }
         })
         .response
@@ -103,38 +102,29 @@ impl Painting {
 
     pub fn ui_content(&mut self, ui: &mut Ui) -> egui::Response {
         let (mut response, painter) =
-            ui.allocate_painter(ui.available_size_before_wrap(), Sense::drag());
+            ui.allocate_painter(ui.available_size_before_wrap(), Sense::click());
 
-        let to_screen = emath::RectTransform::from_to(
-            Rect::from_min_size(Pos2::ZERO, response.rect.square_proportions()),
-            response.rect,
-        );
-        let from_screen = to_screen.inverse();
-
-        if self.lines.is_empty() {
-            self.lines.push(vec![]);
-        }
-
-        let current_line = self.lines.last_mut().unwrap();
+        // let to_screen = emath::RectTransform::from_to(
+        //     Rect::from_min_size(Pos2::ZERO, response.rect.square_proportions()),
+        //     response.rect,
+        // );
+        // let from_screen = to_screen.inverse();
 
         if let Some(pointer_pos) = response.interact_pointer_pos() {
-            let canvas_pos = from_screen * pointer_pos;
-            if current_line.last() != Some(&canvas_pos) {
-                current_line.push(canvas_pos);
-                response.mark_changed();
-            }
-        } else if !current_line.is_empty() {
-            self.lines.push(vec![]);
+            // let canvas_pos = from_screen * pointer_pos;
+            // self.points.push(pointer_pos);
+            self.points.push(pointer_pos);
             response.mark_changed();
         }
 
         let shapes = self
-            .lines
+            .points
             .iter()
-            .filter(|line| line.len() >= 2)
-            .map(|line| {
-                let points: Vec<Pos2> = line.iter().map(|p| to_screen * *p).collect();
-                egui::Shape::line(points, self.stroke)
+            // .filter(|point| point.len() >= 1)
+            .map(|point| {
+                // let center = to_screen * *point;
+                let center = *point;
+                egui::Shape::circle_filled(center, 5., Color32::RED)
             });
 
         painter.extend(shapes);
@@ -145,7 +135,7 @@ impl Painting {
 
 impl eframe::App for Painting {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        egui::TopBottomPanel::top("top_panel").show(ctx, |ui|{
+        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             egui::widgets::global_dark_light_mode_buttons(ui);
         });
 
@@ -154,7 +144,6 @@ impl eframe::App for Painting {
             self.ui_control(ui);
             self.ui_content(ui);
         });
-        
     }
 }
 
