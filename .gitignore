@@ -1,5 +1,5 @@
-# Mac stuff:
-.DS_Store
+# vscode stuff:
+/.vscode
 
 # trunk output folder
 dist
