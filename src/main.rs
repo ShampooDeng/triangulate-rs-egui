@@ -104,17 +104,16 @@ impl Painting {
         let (mut response, painter) =
             ui.allocate_painter(ui.available_size_before_wrap(), Sense::click());
 
-        // let to_screen = emath::RectTransform::from_to(
-        //     Rect::from_min_size(Pos2::ZERO, response.rect.square_proportions()),
-        //     response.rect,
-        // );
-        // let from_screen = to_screen.inverse();
-
         if let Some(pointer_pos) = response.interact_pointer_pos() {
-            // let canvas_pos = from_screen * pointer_pos;
-            // self.points.push(pointer_pos);
-            self.points.push(pointer_pos);
-            response.mark_changed();
+            if let Some(last_point) = self.points.last(){
+                if (last_point.x - pointer_pos.x).abs() > 5. && (last_point.y - pointer_pos.y).abs() > 5.{
+                    self.points.push(pointer_pos);
+                    response.mark_changed();
+                }
+            } else {
+                self.points.push(pointer_pos);
+                response.mark_changed();
+            }
         }
 
         let shapes = self
