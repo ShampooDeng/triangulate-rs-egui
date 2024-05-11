@@ -25,7 +25,7 @@ impl Painting {
     pub fn ui_control(&mut self, ui: &mut egui::Ui) -> egui::Response {
         ui.horizontal(|ui| {
             ui.label("Stroke:");
-            egui::stroke_ui(ui, &mut self.stroke, "nihao");
+            egui::stroke_ui(ui, &mut self.stroke, "preview");
             ui.separator();
             if ui.button("Clear Painting").clicked() {
                 self.points.clear();
@@ -52,7 +52,7 @@ impl Painting {
             }
         }
 
-        let shapes = self
+        let vertices = self
             .points
             .iter()
             // .filter(|point| point.len() >= 1)
@@ -61,9 +61,14 @@ impl Painting {
                 let center = *point;
                 egui::Shape::circle_filled(center, 5., Color32::RED)
             });
+        painter.extend(vertices);
 
-        painter.extend(shapes);
-
+        // FIXME: Diagnostics: cannot move out of `self.points` which is behind a
+        // mutable reference move occurs because `self.points` has type
+        // `std::vec::Vec<egui::Pos2>`, which does not implement the `Copy` trait [E0507]
+        //
+        // let lines = Shape::line(self.points, self.stroke);
+        // painter.add(lines);
         response
     }
 }
