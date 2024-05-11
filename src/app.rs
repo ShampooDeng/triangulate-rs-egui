@@ -1,109 +1,105 @@
-/// We derive Deserialize/Serialize so we can persist app state on shutdown.
-#[derive(serde::Deserialize, serde::Serialize)]
-#[serde(default)] // if we add new fields, give them default values when deserializing old state
-pub struct TemplateApp {
-    // Example stuff:
-    label: String,
+use eframe::egui::*;
 
-    #[serde(skip)] // This how you opt-out of serialization of a field
-    value: f32,
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[cfg_attr(feature = "serde", serde(default))]
+pub struct Painting {
+    /// in 0-1 normalized coordinates
+    points: Vec<Pos2>,
+    stroke: Stroke,
+    radius: f32,
+    triangulating: bool,
 }
 
-impl Default for TemplateApp {
+impl Default for Painting {
     fn default() -> Self {
         Self {
-            // Example stuff:
-            label: "Hello World!".to_owned(),
-            value: 2.7,
+            points: Default::default(),
+            stroke: Stroke::new(1.0, Color32::from_rgb(25, 200, 100)),
+            radius: 5.,
+            triangulating: false,
         }
     }
 }
 
-impl TemplateApp {
-    /// Called once before the first frame.
-    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        // This is also where you can customize the look and feel of egui using
-        // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
+impl Painting {
+    fn draw_vertices(&mut self, p: &Painter) {
+        let vertices = self.points.iter().map(|point| {
+            let center = *point;
+            egui::Shape::circle_filled(center, self.radius, Color32::RED)
+        });
+        p.extend(vertices);
+    }
 
-        // Load previous app state (if any).
-        // Note that you must enable the `persistence` feature for this to work.
-        if let Some(storage) = cc.storage {
-            return eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default();
+    fn draw_polygon(&mut self, p: &Painter) {
+        let mut points = self.points.clone();
+        if self.points.len() > 2 {
+            points.push(self.points[0]);
         }
-
-        Default::default()
-    }
-}
-
-impl eframe::App for TemplateApp {
-    /// Called by the frame work to save state before shutdown.
-    fn save(&mut self, storage: &mut dyn eframe::Storage) {
-        eframe::set_value(storage, eframe::APP_KEY, self);
+        let polygon_outline = Shape::line(points, self.stroke);
+        p.add(polygon_outline);
     }
 
-    /// Called each time the UI needs repainting, which may be many times per second.
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // Put your widgets into a `SidePanel`, `TopBottomPanel`, `CentralPanel`, `Window` or `Area`.
-        // For inspiration and more examples, go to https://emilk.github.io/egui
+    fn _timer(&mut self) {
+        todo!()
+    }
 
-        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
-            // The top panel is often a good place for a menu bar:
+    fn ui_control(&mut self, ui: &mut egui::Ui) -> egui::Response {
+        ui.horizontal(|ui| {
+            ui.label("Stroke:");
+            egui::stroke_ui(ui, &mut self.stroke, "preview");
+            ui.separator();
+            ui.label("Radius");
+            ui.add(DragValue::new(&mut self.radius));
+            ui.separator();
+            if ui.button("Clear Painting").clicked() {
+                self.points.clear();
+            }
+            if ui.button("Triangulate Polygon").clicked() {
+                self.triangulating = true;
+                // TODO: add text to info user that "Triangulation is in process"
+            }
+            if self.triangulating {
+                ui.spinner();
+            }
+        })
+        .response
+    }
 
-            egui::menu::bar(ui, |ui| {
-                // NOTE: no File->Quit on web pages!
-                let is_web = cfg!(target_arch = "wasm32");
-                if !is_web {
-                    ui.menu_button("File", |ui| {
-                        if ui.button("Quit").clicked() {
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                        }
-                    });
-                    ui.add_space(16.0);
+    fn ui_content(&mut self, ui: &mut Ui) -> egui::Response {
+        let (mut response, painter) =
+            ui.allocate_painter(ui.available_size_before_wrap(), Sense::click());
+
+        if let Some(pointer_pos) = response.interact_pointer_pos() {
+            if let Some(last_point) = self.points.last() {
+                if (last_point.x - pointer_pos.x).powi(2) + (last_point.y - pointer_pos.y).powi(2)
+                    > 1000.
+                {
+                    self.points.push(pointer_pos);
+                    response.mark_changed();
                 }
+            } else {
+                self.points.push(pointer_pos);
+                response.mark_changed();
+            }
+        }
 
-                egui::widgets::global_dark_light_mode_buttons(ui);
-            });
+        self.draw_vertices(&painter);
+        self.draw_polygon(&painter);
+
+        response
+    }
+}
+
+impl eframe::App for Painting {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
+            egui::widgets::global_dark_light_mode_buttons(ui);
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            // The central panel the region left after adding TopPanel's and SidePanel's
-            ui.heading("eframe template");
-
-            ui.horizontal(|ui| {
-                ui.label("Write something: ");
-                ui.text_edit_singleline(&mut self.label);
-            });
-
-            ui.add(egui::Slider::new(&mut self.value, 0.0..=10.0).text("value"));
-            if ui.button("Increment").clicked() {
-                self.value += 1.0;
-            }
-
-            ui.separator();
-
-            ui.add(egui::github_link_file!(
-                "https://github.com/emilk/eframe_template/blob/main/",
-                "Source code."
-            ));
-
-            ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
-                powered_by_egui_and_eframe(ui);
-                egui::warn_if_debug_build(ui);
-            });
+            ui.heading("Painting!");
+            self.ui_control(ui);
+            self.ui_content(ui);
         });
     }
-}
-
-fn powered_by_egui_and_eframe(ui: &mut egui::Ui) {
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 0.0;
-        ui.label("Powered by ");
-        ui.hyperlink_to("egui", "https://github.com/emilk/egui");
-        ui.label(" and ");
-        ui.hyperlink_to(
-            "eframe",
-            "https://github.com/emilk/egui/tree/master/crates/eframe",
-        );
-        ui.label(".");
-    });
 }
