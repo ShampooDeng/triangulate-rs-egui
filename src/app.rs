@@ -1,4 +1,5 @@
 use eframe::egui::*;
+use log::debug;
 
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[cfg_attr(feature = "serde", serde(default))]
@@ -8,8 +9,9 @@ pub struct Painting {
     stroke: Stroke,
     radius: f32,
     kdtree: kd_tree::KdTree2<[f32; 2]>,
-    foucsed_point: Pos2,
+    focused_point: Pos2,
 
+    // Application mode flag
     triangulating: bool,
     coloring: bool,
 }
@@ -21,9 +23,8 @@ impl Default for Painting {
             stroke: Stroke::new(1.0, Color32::from_rgb(25, 200, 100)),
             radius: 5.,
             kdtree: kd_tree::KdTree2::default(),
-            foucsed_point: pos2(-1., -1.),
+            focused_point: pos2(-1., -1.),
 
-            // App mode flag
             triangulating: false,
             coloring: false,
         }
@@ -36,15 +37,16 @@ impl Painting {
             let bounding_box_stroke = Stroke::new(2., Color32::BLACK);
             let rectangle = Rect {
                 max: pos2(
-                    self.foucsed_point.x + self.radius,
-                    self.foucsed_point.y + self.radius,
+                    self.focused_point.x + self.radius,
+                    self.focused_point.y + self.radius,
                 ),
                 min: pos2(
-                    self.foucsed_point.x - self.radius,
-                    self.foucsed_point.y - self.radius,
+                    self.focused_point.x - self.radius,
+                    self.focused_point.y - self.radius,
                 ),
             };
-            let bounding_box = egui::Shape::rect_stroke(rectangle, Rounding::ZERO, bounding_box_stroke);
+            let bounding_box =
+                egui::Shape::rect_stroke(rectangle, Rounding::ZERO, bounding_box_stroke);
             p.add(bounding_box);
         }
     }
@@ -79,7 +81,7 @@ impl Painting {
             }
             if ui.button("Triangulate Polygon").clicked() {
                 self.triangulating = true;
-                // TODO: add text to info user that "Triangulation is in process"
+                // TODO: add text to inform user that "Triangulation is in process"
             }
             if ui.button("3-coloring triangles").clicked() {
                 self.coloring = !self.coloring;
@@ -96,6 +98,10 @@ impl Painting {
             ui.allocate_painter(ui.available_size_before_wrap(), Sense::click());
 
         if let Some(current_pos) = response.interact_pointer_pos() {
+            debug!(
+                "current cursor position:({},{})",
+                current_pos.x, current_pos.y
+            );
             if self.coloring {
                 self.kdtree = kd_tree::KdTree2::build_by_ordered_float(Vec::from_iter(
                     self.points.iter().map(|point| [point.x, point.y]),
@@ -103,7 +109,11 @@ impl Painting {
                 if let Some(nearest_point) = self.kdtree.nearest(&[current_pos.x, current_pos.y]) {
                     let x = nearest_point.item[0];
                     let y = nearest_point.item[1];
-                    self.foucsed_point = pos2(x, y);
+                    self.focused_point = pos2(x, y);
+                    debug!(
+                        "Focused point coordinate:({},{})",
+                        self.focused_point.x, self.focused_point.y
+                    );
                 }
             } else if self.triangulating {
                 // TODO: implement triangulate algorithm
@@ -124,6 +134,7 @@ impl Painting {
             }
         }
 
+        // Drawing ui content
         self.draw_vertices(&painter);
         self.draw_polygon(&painter);
         self.mark_selected_point(&painter);
@@ -143,5 +154,19 @@ impl eframe::App for Painting {
             self.ui_control(ui);
             self.ui_content(ui);
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use egui::pos2;
+
+    #[test]
+    fn test_kdtree() {
+        let points = vec![pos2(1., 1.), pos2(2., 2.), pos2(3., 1.)];
+        let kdtree = kd_tree::KdTree2::build_by_ordered_float(Vec::from_iter(
+            points.iter().map(|point| [point.x, point.y]),
+        ));
+        assert_eq!(kdtree.nearest(&[1., 1.1]).unwrap().item, &[1., 1.]);
     }
 }
