@@ -67,20 +67,30 @@ impl DCEL {
         }
     }
 
-    fn priority_queue(&self) -> Vec<Point> {
-        let mut priority_queue = self
-            .vertices
-            .iter()
-            .map(|v| v.coordinates)
-            .collect::<Vec<Point>>();
-        priority_queue.sort_by(|a, b| {
-            let mut result = a.y.partial_cmp(&b.y).unwrap();
+    pub fn event_queue(&self) -> Vec<usize> {
+        // let mut priority_queue = self
+        //     .vertices
+        //     .iter()
+        //     .map(|v| v.coordinates)
+        //     .collect::<Vec<Point>>();
+        // priority_queue.sort_by(|a, b| {
+        //     let mut result = a.y.partial_cmp(&b.y).unwrap();
+        //     if result.is_eq() {
+        //         result = a.x.partial_cmp(&b.x).unwrap();
+        //     }
+        //     result
+        // });
+        let mut event_queue = Vec::from_iter(0..self.vertices.len());
+        event_queue.sort_by(|a, b| {
+            let a_coordinate = self.vertices[*a].coordinates;
+            let b_coordinate = self.vertices[*b].coordinates;
+            let mut result = a_coordinate.y.partial_cmp(&b_coordinate.y).unwrap();
             if result.is_eq() {
-                result = a.x.partial_cmp(&b.x).unwrap();
+                result = a_coordinate.x.partial_cmp(&b_coordinate.x).unwrap();
             }
             result
         });
-        priority_queue
+        event_queue
     }
 
     //     fn remove_edge(&mut self, edge: usize) {
@@ -441,12 +451,7 @@ mod tests {
 
     #[test]
     fn test_output_priority_queue() {
-        let truth = vec![
-            Point::new(1., 1.),
-            Point::new(0., 2.),
-            Point::new(2., 2.),
-            Point::new(1., 3.),
-        ];
+        let truth = vec![0,3,1,2];
         let pts = vec![
             Point::new(1., 1.),
             Point::new(2., 2.),
@@ -454,7 +459,7 @@ mod tests {
             Point::new(0., 2.),
         ];
         let dcel = polygon_to_dcel(&pts);
-        let order_queue = dcel.priority_queue();
+        let order_queue = dcel.event_queue();
         assert_eq!(order_queue, truth);
     }
 }
