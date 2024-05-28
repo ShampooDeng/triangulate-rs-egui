@@ -1,5 +1,9 @@
 use eframe::egui::*;
+use kd_tree::KdTree2;
 use log::debug;
+
+use crate::dcel::polygon_to_dcel;
+use crate::triangulate::make_monotone;
 
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[cfg_attr(feature = "serde", serde(default))]
@@ -8,7 +12,7 @@ pub struct Painting {
     points: Vec<Pos2>,
     stroke: Stroke,
     radius: f32,
-    kdtree: kd_tree::KdTree2<[f32; 2]>,
+    kdtree: KdTree2<[f32; 2]>,
     focused_point: Pos2,
 
     // Application mode flag
@@ -22,7 +26,7 @@ impl Default for Painting {
             points: Default::default(),
             stroke: Stroke::new(1.0, Color32::from_rgb(25, 200, 100)),
             radius: 5.,
-            kdtree: kd_tree::KdTree2::default(),
+            kdtree: KdTree2::default(),
             focused_point: pos2(-1., -1.),
 
             triangulating: false,
@@ -82,6 +86,9 @@ impl Painting {
             if ui.button("Triangulate Polygon").clicked() {
                 self.triangulating = true;
                 // TODO: add text to inform user that "Triangulation is in process"
+                let dcel = polygon_to_dcel(&self.points);
+                make_monotone(&dcel);
+                self.triangulating = false;
             }
             if ui.button("3-coloring triangles").clicked() {
                 self.coloring = !self.coloring;
@@ -103,7 +110,7 @@ impl Painting {
                 current_pos.x, current_pos.y
             );
             if self.coloring {
-                self.kdtree = kd_tree::KdTree2::build_by_ordered_float(Vec::from_iter(
+                self.kdtree = KdTree2::build_by_ordered_float(Vec::from_iter(
                     self.points.iter().map(|point| [point.x, point.y]),
                 ));
                 if let Some(nearest_point) = self.kdtree.nearest(&[current_pos.x, current_pos.y]) {
@@ -115,10 +122,6 @@ impl Painting {
                         self.focused_point.x, self.focused_point.y
                     );
                 }
-            } else if self.triangulating {
-                // TODO: implement triangulate algorithm
-                // TOOD: demonstrate the process of triangulating step by step.
-                todo!()
             } else if let Some(last_point) = self.points.last() {
                 // Reject the current cursor position is too close the last point position.
                 if (last_point.x - current_pos.x).powi(2) + (last_point.y - current_pos.y).powi(2)
