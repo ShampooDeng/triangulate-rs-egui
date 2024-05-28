@@ -68,18 +68,6 @@ impl DCEL {
     }
 
     pub fn event_queue(&self) -> Vec<usize> {
-        // let mut priority_queue = self
-        //     .vertices
-        //     .iter()
-        //     .map(|v| v.coordinates)
-        //     .collect::<Vec<Point>>();
-        // priority_queue.sort_by(|a, b| {
-        //     let mut result = a.y.partial_cmp(&b.y).unwrap();
-        //     if result.is_eq() {
-        //         result = a.x.partial_cmp(&b.x).unwrap();
-        //     }
-        //     result
-        // });
         let mut event_queue = Vec::from_iter(0..self.vertices.len());
         event_queue.sort_by(|a, b| {
             let a_coordinate = self.vertices[*a].coordinates;
@@ -90,6 +78,8 @@ impl DCEL {
             }
             result
         });
+        // HACK: the origin of the gui is at the left upper corner.
+        event_queue.reverse();
         event_queue
     }
 
@@ -331,12 +321,14 @@ pub fn make_polygons(dcel: &DCEL) -> Vec<Vec<Point>> {
 pub fn polygon_to_dcel(polygon: &Vec<Point>) -> DCEL {
     let mut dcel = DCEL::new();
     // construct vertices
+    let mut incident_edge_idx = 0;
     for point in polygon {
         let vertex = Vertex {
             coordinates: *point,
-            incident_edge: NIL,
+            incident_edge: incident_edge_idx,
             alive: true,
         };
+        incident_edge_idx += 2;
         dcel.vertices.push(vertex);
     }
     // construct halfedges
@@ -400,13 +392,19 @@ mod tests {
             .iter()
             .map(|v| v.coordinates)
             .collect::<Vec<Point>>();
+        let incident_edge = dcel
+            .vertices
+            .iter()
+            .map(|v| v.incident_edge)
+            .collect::<Vec<usize>>();
         assert_eq!(vertices, pts);
+        assert_eq!(incident_edge, [0,2,4,6]);
+        // validate halfedges
         let halfedges_origin = dcel
             .halfedges
             .iter()
             .map(|h| h.origin)
             .collect::<Vec<usize>>();
-        // validate halfedges
         assert_eq!(halfedges_origin, vec![0, 1, 1, 2, 2, 3, 3, 0]);
         let halfedges_twin = dcel
             .halfedges
@@ -451,7 +449,8 @@ mod tests {
 
     #[test]
     fn test_output_priority_queue() {
-        let truth = vec![0,3,1,2];
+        let mut truth = vec![0,3,1,2];
+        truth.reverse();
         let pts = vec![
             Point::new(1., 1.),
             Point::new(2., 2.),
