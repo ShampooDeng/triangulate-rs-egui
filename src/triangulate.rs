@@ -35,12 +35,11 @@ fn cmp_slope(p: Pos2, q: Pos2, r: Pos2) -> Orientation {
     let slope_pq = (q.y - p.y) * (r.x - p.x);
     let slope_pr = (r.y - p.y) * (q.x - p.x);
     match slope_pq.partial_cmp(&slope_pr) {
-        // HACK: the origin of the gui is on the upper left, so this maybe counter-intuitive
         Some(Ordering::Equal) => Orientation::Colinear,
-        // (y_q-y_p)(x_r-x_p) > (y_r-y_p)(x_q-x_p) => ccw
-        Some(Ordering::Greater) => Orientation::CounterClockWise,
+        // (y_q-y_p)(x_r-x_p) > (y_r-y_p)(x_q-x_p) => cw
+        Some(Ordering::Greater) => Orientation::ClockWise,
         // (y_q-y_p)(x_r-x_p) < (y_r-y_p)(x_q-x_p) => ccw
-        Some(Ordering::Less) => Orientation::ClockWise,
+        Some(Ordering::Less) => Orientation::CounterClockWise,
         None => panic!(
             "Comparison between {}, {} is impossible",
             slope_pq, slope_pr
@@ -50,9 +49,8 @@ fn cmp_slope(p: Pos2, q: Pos2, r: Pos2) -> Orientation {
 
 fn cmp_vertex_height(p: Pos2, q: Pos2, r: Pos2) -> MiddleVertexStatus {
     match (q.y.ge(&p.y), q.y.le(&r.y)) {
-        // HACK: the origin of the gui is on the upper left, so this maybe counter-intuitive
-        (true, false) => MiddleVertexStatus::Concave,
-        (false, true) => MiddleVertexStatus::Convex,
+        (true, false) => MiddleVertexStatus::Convex,
+        (false, true) => MiddleVertexStatus::Concave,
         _ => MiddleVertexStatus::Gradient,
     }
 }
@@ -81,7 +79,7 @@ pub fn make_monotone(polygon: &DCEL) {
                 debug!("{} is merge vertex", idx);
             }
         }
-        // BUG: this unfinished
+        // WARN: this unfinished
     }
 }
 
@@ -98,7 +96,7 @@ fn check_vertex_type(vertex_idx: usize, polygon: &DCEL) -> VertexType {
         pre_idx = vertex_idx - 1;
         next_idx = vertex_idx + 1;
     }
-    
+
     let cur = polygon.vertices[vertex_idx].coordinates;
     let pre = polygon.vertices[pre_idx].coordinates;
     let next = polygon.vertices[next_idx].coordinates;
@@ -121,7 +119,6 @@ fn handle_start_vertex(vertex_idx: usize, polygon: &DCEL, status: &mut BTreeMap<
         helper: NIL,
     };
     status.insert(
-        // HACK: BTreeMap don't support f32 as key. So keep 2 digits after decimal point.
         (polygon.vertices[origin_idx].coordinates.x * 100.).round() as i32,
         incident_edge,
     );
@@ -149,11 +146,9 @@ fn handle_regular_vertex() {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::{BTreeMap, BTreeSet};
-
-    use egui::Pos2;
-
     use crate::triangulate::{cmp_slope, cmp_vertex_height, MiddleVertexStatus, Orientation};
+    use egui::Pos2;
+    use std::collections::{BTreeMap, BTreeSet};
     struct Edge {
         origin: f32,
         label: String,
@@ -186,11 +181,12 @@ mod tests {
     #[test]
     fn test_cmp_slope() {
         match cmp_slope(Pos2::new(1., 3.), Pos2::new(2., 2.), Pos2::new(1., 1.)) {
-            Orientation::CounterClockWise => assert!(true),
+            Orientation::ClockWise => assert!(true),
+
             _ => assert!(false),
         }
         match cmp_slope(Pos2::new(1., 1.), Pos2::new(2., 2.), Pos2::new(1., 3.)) {
-            Orientation::ClockWise => assert!(true),
+            Orientation::CounterClockWise => assert!(true),
             _ => assert!(false),
         }
         match cmp_slope(Pos2::new(1., 1.), Pos2::new(2., 2.), Pos2::new(3., 3.)) {
@@ -198,7 +194,7 @@ mod tests {
             _ => assert!(false),
         }
         match cmp_slope(Pos2::new(1., 3.), Pos2::new(3., 3.), Pos2::new(3., 1.)) {
-            Orientation::CounterClockWise => assert!(true),
+            Orientation::ClockWise => assert!(true),
             _ => assert!(false),
         }
     }
@@ -209,11 +205,11 @@ mod tests {
             MiddleVertexStatus::Gradient => assert!(true),
             _ => assert!(false, "wasn't gradient"),
         }
-        match cmp_vertex_height(Pos2::new(1., 3.), Pos2::new(3., 0.), Pos2::new(3., 3.)) {
+        match cmp_vertex_height(Pos2::new(1., 3.), Pos2::new(3., 5.), Pos2::new(3., 3.)) {
             MiddleVertexStatus::Convex => assert!(true),
             _ => assert!(false, "wasn't convex"),
         }
-        match cmp_vertex_height(Pos2::new(1., 3.), Pos2::new(3., 5.), Pos2::new(3., 3.)) {
+        match cmp_vertex_height(Pos2::new(1., 3.), Pos2::new(3., 0.), Pos2::new(3., 3.)) {
             MiddleVertexStatus::Concave => assert!(true),
             _ => assert!(false, "wasn't concave"),
         }

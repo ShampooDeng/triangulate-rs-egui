@@ -1,8 +1,8 @@
 /// The following code is adapted from https://docs.rs/crate/voronoi/0.1.4/source/src/dcel.rs
+use crate::NIL;
 use egui::Pos2 as Point;
 use log::info;
-use std::fmt;
-use crate::NIL;
+use std::{cmp::Ordering, fmt};
 
 /// Doubly Connected Edge List representation of a subdivision of the plane.
 pub struct DCEL {
@@ -74,11 +74,14 @@ impl DCEL {
             let mut result = a_coordinate.y.partial_cmp(&b_coordinate.y).unwrap();
             if result.is_eq() {
                 result = a_coordinate.x.partial_cmp(&b_coordinate.x).unwrap();
+                match result {
+                    Ordering::Less => result = Ordering::Greater,
+                    Ordering::Greater => result = Ordering::Less,
+                    _ => {}
+                }
             }
             result
         });
-        // HACK: the origin of the gui is at the left upper corner.
-        event_queue.reverse();
         event_queue
     }
 
@@ -288,7 +291,8 @@ pub fn add_faces(dcel: &mut DCEL) {
     info!("Generated faces for {} edges.", processed_edges);
 }
 
-/// Constructs the faces of the Voronoi diagram.
+/// Constructs the faces of monotone polygon subdivisions.
+// WARN: make_polygons is not checked
 pub fn make_polygons(dcel: &DCEL) -> Vec<Vec<Point>> {
     let mut result = vec![];
     for face in &dcel.faces {
@@ -310,7 +314,7 @@ pub fn make_polygons(dcel: &DCEL) -> Vec<Vec<Point>> {
 
     // remove the outer face
     result.sort_by(|a, b| a.len().cmp(&b.len()));
-    // ??? why remove the outer face
+    // ???: why remove the outer face
     // result.pop();
 
     return result;
@@ -397,7 +401,7 @@ mod tests {
             .map(|v| v.incident_edge)
             .collect::<Vec<usize>>();
         assert_eq!(vertices, pts);
-        assert_eq!(incident_edge, [0,2,4,6]);
+        assert_eq!(incident_edge, [0, 2, 4, 6]);
         // validate halfedges
         let halfedges_origin = dcel
             .halfedges
@@ -447,9 +451,8 @@ mod tests {
     }
 
     #[test]
-    fn test_output_priority_queue() {
-        let mut truth = vec![0,3,1,2];
-        truth.reverse();
+    fn test_output_event_queue() {
+        let truth = vec![0, 1, 3, 2];
         let pts = vec![
             Point::new(1., 1.),
             Point::new(2., 2.),
