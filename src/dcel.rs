@@ -313,11 +313,11 @@ pub fn make_polygons(dcel: &DCEL) -> Vec<Vec<Point>> {
     }
 
     // remove the outer face
-    result.sort_by(|a, b| a.len().cmp(&b.len()));
+    result.sort_by_key(|a| a.len());
     // ???: why remove the outer face
     // result.pop();
 
-    return result;
+    result
 }
 
 /// Construsct a Dcel from a simple polygon in vec<Pos2>

@@ -63,8 +63,7 @@ impl Painting {
     /// conventional coordiante system's origin rests in the lower left corner,
     /// which is more intuitive and easier to handle.
     fn from_screen(&self) -> TransformPos {
-        let from_screen = TransformPos::new(vec2(0., self._painting_rect.size().y), vec2(1., -1.));
-        from_screen
+        TransformPos::new(vec2(0., self._painting_rect.size().y), vec2(1., -1.))
     }
 
     /// Transpose coordinates from conventional coordinate system to gui's coordinate system.
@@ -73,6 +72,7 @@ impl Painting {
         from_screen.inverse()
     }
 
+    /// Mark the selected vertex in vertex coloring process.
     fn mark_selected_point(&mut self, p: &Painter) {
         if self.coloring {
             let bounding_box_stroke = Stroke::new(2., Color32::BLACK);
@@ -87,6 +87,7 @@ impl Painting {
         }
     }
 
+    /// Draw vertices spawned by Mouse click in the drawing area.
     fn draw_vertices(&mut self, p: &Painter) {
         // Draw vertices
         let vertices = self.points.iter().map(|point| {
@@ -95,6 +96,7 @@ impl Painting {
             egui::Shape::circle_filled(center, self.radius, Color32::RED)
         });
         p.extend(vertices);
+
         // Add number to lower right corner of the vertex
         for i in 0..self.points.len() {
             let font_id = egui::FontId::new(15., FontFamily::Monospace);
@@ -110,7 +112,8 @@ impl Painting {
         let mut points = self
             .points
             .iter()
-            .map(|point| self.to_screen() * *point)// Transpose vertex coordinate to gui's coordiante system.
+            // Transpose vertex coordinate to gui's coordiante system.
+            .map(|point| self.to_screen() * *point)             
             .collect::<Vec<Pos2>>();
         // Join the last vertex and the first vertex to seal the polygon.
         if self.points.len() > 2 {
@@ -120,6 +123,7 @@ impl Painting {
         p.add(polygon_outline);
     }
 
+    /// Define Gui widget layout, and button click event.
     fn ui_control(&mut self, ui: &mut egui::Ui) -> egui::Response {
         ui.horizontal(|ui| {
             ui.label("Stroke:");
@@ -149,22 +153,23 @@ impl Painting {
         .response
     }
 
+    /// Define how to update ui content.
     fn ui_content(&mut self, ui: &mut Ui) -> egui::Response {
+        // TODO: more docs here.
         let (mut response, painter) =
             ui.allocate_painter(ui.available_size_before_wrap(), Sense::click());
         self._painting_rect = response.rect;
         if let Some(cur_pos) = response.interact_pointer_pos() {
-            debug!(
-                "current cursor position:({},{})",
-                cur_pos.x, cur_pos.y
-            );
+            debug!("current cursor position:({},{})", cur_pos.x, cur_pos.y);
             // Transpose current cursor's position to conventional coordinate system.
             let current_point = self.from_screen() * cur_pos;
             if self.coloring {
                 self.kdtree = KdTree2::build_by_ordered_float(Vec::from_iter(
                     self.points.iter().map(|point| [point.x, point.y]),
                 ));
-                if let Some(nearest_point) = self.kdtree.nearest(&[current_point.x, current_point.y]) {
+                if let Some(nearest_point) =
+                    self.kdtree.nearest(&[current_point.x, current_point.y])
+                {
                     let x = nearest_point.item[0];
                     let y = nearest_point.item[1];
                     self.focused_point = pos2(x, y);
@@ -228,7 +233,7 @@ mod tests {
 
     #[test]
     fn test_kdtree() {
-        let points = vec![pos2(1., 1.), pos2(2., 2.), pos2(3., 1.)];
+        let points = [pos2(1., 1.), pos2(2., 2.), pos2(3., 1.)];
         let kdtree = kd_tree::KdTree2::build_by_ordered_float(Vec::from_iter(
             points.iter().map(|point| [point.x, point.y]),
         ));

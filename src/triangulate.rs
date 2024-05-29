@@ -2,7 +2,7 @@ use egui::Pos2;
 use log::debug;
 use std::{cmp::Ordering, collections::BTreeMap};
 
-use crate::{NIL, dcel::DCEL};
+use crate::{dcel::DCEL, NIL};
 
 pub enum VertexType {
     StartVertex,
@@ -181,37 +181,37 @@ mod tests {
     #[test]
     fn test_cmp_slope() {
         match cmp_slope(Pos2::new(1., 3.), Pos2::new(2., 2.), Pos2::new(1., 1.)) {
-            Orientation::ClockWise => assert!(true),
+            Orientation::ClockWise => (),
 
-            _ => assert!(false),
+            _ => panic!("match clockwise fail"),
         }
         match cmp_slope(Pos2::new(1., 1.), Pos2::new(2., 2.), Pos2::new(1., 3.)) {
-            Orientation::CounterClockWise => assert!(true),
-            _ => assert!(false),
+            Orientation::CounterClockWise => (),
+            _ => panic!("match counter-clockwise fail"),
         }
         match cmp_slope(Pos2::new(1., 1.), Pos2::new(2., 2.), Pos2::new(3., 3.)) {
-            Orientation::Colinear => assert!(true),
-            _ => assert!(false),
+            Orientation::Colinear => (),
+            _ => panic!("match colinear fail"),
         }
         match cmp_slope(Pos2::new(1., 3.), Pos2::new(3., 3.), Pos2::new(3., 1.)) {
-            Orientation::ClockWise => assert!(true),
-            _ => assert!(false),
+            Orientation::ClockWise => (),
+            _ => panic!("match clockwise fail"),
         }
     }
 
     #[test]
     fn test_cmp_vertex_height() {
         match cmp_vertex_height(Pos2::new(1., 1.), Pos2::new(2., 2.), Pos2::new(3., 3.)) {
-            MiddleVertexStatus::Gradient => assert!(true),
-            _ => assert!(false, "wasn't gradient"),
+            MiddleVertexStatus::Gradient => (),
+            _ => panic!("match gradient tyep fail"),
         }
         match cmp_vertex_height(Pos2::new(1., 3.), Pos2::new(3., 5.), Pos2::new(3., 3.)) {
-            MiddleVertexStatus::Convex => assert!(true),
-            _ => assert!(false, "wasn't convex"),
+            MiddleVertexStatus::Convex => (),
+            _ => panic!("match convex type fail"),
         }
         match cmp_vertex_height(Pos2::new(1., 3.), Pos2::new(3., 0.), Pos2::new(3., 3.)) {
-            MiddleVertexStatus::Concave => assert!(true),
-            _ => assert!(false, "wasn't concave"),
+            MiddleVertexStatus::Concave => (),
+            _ => panic!("match concave fail"),
         }
     }
 }
