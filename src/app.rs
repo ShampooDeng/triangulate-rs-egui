@@ -5,6 +5,8 @@ use log::debug;
 use crate::dcel::polygon_to_dcel;
 use crate::triangulate::make_monotone;
 
+// TODO: more detailed comments
+
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[cfg_attr(feature = "serde", serde(default))]
 pub struct Painting {
@@ -36,6 +38,20 @@ impl Default for Painting {
 }
 
 impl Painting {
+    /// Called once before the first frame.
+    pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
+        // This is also where you can customize the look and feel of egui using
+        // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
+
+        // Load previous app state (if any).
+        // Note that you must enable the `persistence` feature for this to work.
+        // if let Some(storage) = cc.storage {
+        //     return eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default();
+        // }
+
+        Default::default()
+    }
+
     fn mark_selected_point(&mut self, p: &Painter) {
         if self.coloring {
             let bounding_box_stroke = Stroke::new(2., Color32::BLACK);
@@ -56,14 +72,23 @@ impl Painting {
     }
 
     fn draw_vertices(&mut self, p: &Painter) {
+        // Draw vertices
         let vertices = self.points.iter().map(|point| {
             let center = *point;
             egui::Shape::circle_filled(center, self.radius, Color32::RED)
         });
         p.extend(vertices);
+        // Add number to lower right corner of the vertex
+        for i in 0..self.points.len() {
+            let font_id = egui::FontId::new(15., FontFamily::Monospace);
+            let pos = pos2(self.points[i].x + self.radius, self.points[i].y + self.radius);
+            let text = i.to_string();
+            p.text(pos, Align2::LEFT_TOP, text, font_id, Color32::BLACK);
+        }
     }
 
     fn draw_polygon(&mut self, p: &Painter) {
+        // TODO: use the polygons generated from dcel to draw polygons
         let mut points = self.points.clone();
         if self.points.len() > 2 {
             points.push(self.points[0]);
