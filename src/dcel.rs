@@ -2,8 +2,7 @@
 use egui::Pos2 as Point;
 use log::info;
 use std::fmt;
-
-const NIL: usize = !0;
+use crate::NIL;
 
 /// Doubly Connected Edge List representation of a subdivision of the plane.
 pub struct DCEL {

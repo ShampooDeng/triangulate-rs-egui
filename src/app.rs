@@ -4,6 +4,7 @@ use log::debug;
 
 use crate::dcel::polygon_to_dcel;
 use crate::triangulate::make_monotone;
+use crate::TransformPos;
 
 // TODO: more detailed comments
 
@@ -16,6 +17,7 @@ pub struct Painting {
     radius: f32,
     kdtree: KdTree2<[f32; 2]>,
     focused_point: Pos2,
+    _painting_rect: Rect,
 
     // Application mode flag
     triangulating: bool,
@@ -29,7 +31,11 @@ impl Default for Painting {
             stroke: Stroke::new(1.0, Color32::from_rgb(25, 200, 100)),
             radius: 5.,
             kdtree: KdTree2::default(),
-            focused_point: pos2(-1., -1.),
+            focused_point: pos2(-1., -1.), // ???: Is there a better choice than (-1., -1.)
+            _painting_rect: Rect {
+                min: Pos2::ZERO,
+                max: Pos2::ZERO,
+            },
 
             triangulating: false,
             coloring: false,
@@ -52,18 +58,28 @@ impl Painting {
         Default::default()
     }
 
+    /// Transpose coordinates from gui's coordinate system to conventional coordinate system.
+    /// Gui's coordinate system has its origin in the top left corner, while
+    /// conventional coordiante system's origin rests in the lower left corner,
+    /// which is more intuitive and easier to handle.
+    fn from_screen(&self) -> TransformPos {
+        let from_screen = TransformPos::new(vec2(0., self._painting_rect.size().y), vec2(1., -1.));
+        from_screen
+    }
+
+    /// Transpose coordinates from conventional coordinate system to gui's coordinate system.
+    fn to_screen(&self) -> TransformPos {
+        let from_screen = TransformPos::new(vec2(0., self._painting_rect.size().y), vec2(1., -1.));
+        from_screen.inverse()
+    }
+
     fn mark_selected_point(&mut self, p: &Painter) {
         if self.coloring {
             let bounding_box_stroke = Stroke::new(2., Color32::BLACK);
+            let focused_pt = self.to_screen() * self.focused_point;
             let rectangle = Rect {
-                max: pos2(
-                    self.focused_point.x + self.radius,
-                    self.focused_point.y + self.radius,
-                ),
-                min: pos2(
-                    self.focused_point.x - self.radius,
-                    self.focused_point.y - self.radius,
-                ),
+                max: pos2(focused_pt.x + self.radius, focused_pt.y + self.radius),
+                min: pos2(focused_pt.x - self.radius, focused_pt.y - self.radius),
             };
             let bounding_box =
                 egui::Shape::rect_stroke(rectangle, Rounding::ZERO, bounding_box_stroke);
@@ -74,14 +90,16 @@ impl Painting {
     fn draw_vertices(&mut self, p: &Painter) {
         // Draw vertices
         let vertices = self.points.iter().map(|point| {
-            let center = *point;
+            // Transpose vertex coordinate to gui's coordiante system.
+            let center = self.to_screen() * *point;
             egui::Shape::circle_filled(center, self.radius, Color32::RED)
         });
         p.extend(vertices);
         // Add number to lower right corner of the vertex
         for i in 0..self.points.len() {
             let font_id = egui::FontId::new(15., FontFamily::Monospace);
-            let pos = pos2(self.points[i].x + self.radius, self.points[i].y + self.radius);
+            let pt = self.to_screen() * self.points[i];
+            let pos = pos2(pt.x + self.radius, pt.y + self.radius);
             let text = i.to_string();
             p.text(pos, Align2::LEFT_TOP, text, font_id, Color32::BLACK);
         }
@@ -89,9 +107,14 @@ impl Painting {
 
     fn draw_polygon(&mut self, p: &Painter) {
         // TODO: use the polygons generated from dcel to draw polygons
-        let mut points = self.points.clone();
+        let mut points = self
+            .points
+            .iter()
+            .map(|point| self.to_screen() * *point)// Transpose vertex coordinate to gui's coordiante system.
+            .collect::<Vec<Pos2>>();
+        // Join the last vertex and the first vertex to seal the polygon.
         if self.points.len() > 2 {
-            points.push(self.points[0]);
+            points.push(self.to_screen() * self.points[0]);
         }
         let polygon_outline = Shape::line(points, self.stroke);
         p.add(polygon_outline);
@@ -107,6 +130,7 @@ impl Painting {
             ui.separator();
             if ui.button("Clear Painting").clicked() {
                 self.points.clear();
+                self.focused_point = pos2(-1., -1.);
             }
             if ui.button("Triangulate Polygon").clicked() {
                 self.triangulating = true;
@@ -128,17 +152,19 @@ impl Painting {
     fn ui_content(&mut self, ui: &mut Ui) -> egui::Response {
         let (mut response, painter) =
             ui.allocate_painter(ui.available_size_before_wrap(), Sense::click());
-
-        if let Some(current_pos) = response.interact_pointer_pos() {
+        self._painting_rect = response.rect;
+        if let Some(cur_pos) = response.interact_pointer_pos() {
             debug!(
                 "current cursor position:({},{})",
-                current_pos.x, current_pos.y
+                cur_pos.x, cur_pos.y
             );
+            // Transpose current cursor's position to conventional coordinate system.
+            let current_point = self.from_screen() * cur_pos;
             if self.coloring {
                 self.kdtree = KdTree2::build_by_ordered_float(Vec::from_iter(
                     self.points.iter().map(|point| [point.x, point.y]),
                 ));
-                if let Some(nearest_point) = self.kdtree.nearest(&[current_pos.x, current_pos.y]) {
+                if let Some(nearest_point) = self.kdtree.nearest(&[current_point.x, current_point.y]) {
                     let x = nearest_point.item[0];
                     let y = nearest_point.item[1];
                     self.focused_point = pos2(x, y);
@@ -149,15 +175,26 @@ impl Painting {
                 }
             } else if let Some(last_point) = self.points.last() {
                 // Reject the current cursor position is too close the last point position.
-                if (last_point.x - current_pos.x).powi(2) + (last_point.y - current_pos.y).powi(2)
+                if (last_point.x - current_point.x).powi(2)
+                    + (last_point.y - current_point.y).powi(2)
                     > 1000.
                 {
-                    self.points.push(current_pos);
+                    self.points.push(current_point);
                     response.mark_changed();
+                    debug!(
+                        "Pushing point coordinate:({},{})",
+                        self.points.last().unwrap().x,
+                        self.points.last().unwrap().y
+                    );
                 }
             } else {
                 // Jump to here when the points vec is empty.
-                self.points.push(current_pos);
+                self.points.push(current_point);
+                debug!(
+                    "Pushing point coordinate:({},{})",
+                    self.points.last().unwrap().x,
+                    self.points.last().unwrap().y
+                );
                 response.mark_changed();
             }
         }

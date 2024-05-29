@@ -2,9 +2,7 @@ use egui::Pos2;
 use log::debug;
 use std::{cmp::Ordering, collections::BTreeMap};
 
-use crate::dcel::DCEL;
-
-const NIL: usize = !0;
+use crate::{NIL, dcel::DCEL};
 
 pub enum VertexType {
     StartVertex,
