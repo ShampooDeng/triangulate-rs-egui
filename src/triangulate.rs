@@ -149,10 +149,7 @@ mod tests {
     use crate::triangulate::{cmp_slope, cmp_vertex_height, MiddleVertexStatus, Orientation};
     use egui::Pos2;
     use std::collections::{BTreeMap, BTreeSet};
-    struct Edge {
-        origin: f32,
-        label: String,
-    }
+    struct Edge(f32, String);
     #[test]
     fn test_binary_tree_set() {
         let mut bts = BTreeSet::new();
@@ -164,25 +161,29 @@ mod tests {
     #[test]
     fn test_binary_tree_map() {
         let mut btm = BTreeMap::new();
-        let edge1 = Edge {
-            origin: 1.,
-            label: "hahah".to_string(),
-        };
-        let edge2 = Edge {
-            origin: 2.,
-            label: "nice".to_string(),
-        };
-        btm.insert((edge2.origin * 100.).round() as i32, edge2);
-        btm.insert((edge1.origin * 100.).round() as i32, edge1);
+        let edge1 = Edge(1., "hahah".to_string());
+        let edge2 = Edge(5., "nice".to_string());
+        let edge3 = Edge(2., "nice".to_string());
+        let edge4 = Edge(4., "nice".to_string());
+        let edge5 = Edge(1.5, "nice".to_string());
+        // TODO: impl a trait to simplify the insert process
+        btm.insert((edge1.0 * 100.).round() as i32, edge1);
+        btm.insert((edge2.0 * 100.).round() as i32, edge2);
+        btm.insert((edge3.0 * 100.).round() as i32, edge3);
+        btm.insert((edge4.0 * 100.).round() as i32, edge4);
+        btm.insert((edge5.0 * 100.).round() as i32, edge5);
         let keys = btm.into_keys().collect::<Vec<i32>>();
-        assert_eq!(keys, [100, 200]);
+        assert_eq!(keys, &[100, 150, 200, 400, 500]);
+        let high_neighbor = keys.partition_point(|&x| x <= 200);
+        let low_neighbor = keys.partition_point(|&x| x < 200);
+        assert_eq!(high_neighbor, 3);
+        assert_eq!(low_neighbor, 2);
     }
 
     #[test]
     fn test_cmp_slope() {
         match cmp_slope(Pos2::new(1., 3.), Pos2::new(2., 2.), Pos2::new(1., 1.)) {
             Orientation::ClockWise => (),
-
             _ => panic!("match clockwise fail"),
         }
         match cmp_slope(Pos2::new(1., 1.), Pos2::new(2., 2.), Pos2::new(1., 3.)) {
