@@ -4,6 +4,9 @@
 mod app;
 mod dcel;
 mod triangulate;
+mod triangulate_2;
+
+use std::collections::binary_heap::Iter;
 
 pub use app::Painting;
 use egui::{pos2, vec2, Pos2, Vec2};

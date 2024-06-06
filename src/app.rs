@@ -2,8 +2,9 @@ use eframe::egui::*;
 use kd_tree::KdTree2;
 use log::debug;
 
-use crate::dcel::polygon_to_dcel;
+use crate::dcel::DCEL;
 use crate::triangulate::make_monotone;
+use crate::triangulate_2::monoton_polyon_partition;
 use crate::TransformPos;
 
 // TODO: more detailed comments
@@ -139,8 +140,9 @@ impl Painting {
             if ui.button("Triangulate Polygon").clicked() {
                 self.triangulating = true;
                 // TODO: add text to inform user that "Triangulation is in process"
-                let dcel = polygon_to_dcel(&self.points);
-                make_monotone(&dcel);
+                // let dcel = DCEL::build_from_pts(&self.points);
+                // make_monotone(&dcel);
+                monoton_polyon_partition(&self.points);
                 self.triangulating = false;
             }
             if ui.button("3-coloring triangles").clicked() {
