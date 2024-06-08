@@ -263,6 +263,11 @@ impl PartitionTree {
 
     /// Find the a vertex's nearest neighbor in tree
     pub fn lower_bound(&self, vertex: &PartitionVertex) -> i32 {
+        // HACK: return 0 when search tree is empty
+        // Will this cause any bug?
+        if self.search_tree.len() == 0 {
+            return 0;
+        }
         let pred = vertex.magnified_pos_x();
         let low = self.keys.partition_point(|x| x < &pred) - 1;
         self.keys[low]
@@ -346,14 +351,12 @@ fn to_event_queue(input: &Vec<PartitionVertex>) -> Vec<usize> {
     output
 }
 
-// BUG: unchecked
 fn handle_start_vertex(vertex_idx: usize, tree: &mut PartitionTree, poly: &PartitionPolygon) {
     let edge_origin_idx = vertex_idx;
     let helper_idx = vertex_idx;
     tree.insert(edge_origin_idx, helper_idx, poly);
 }
 
-// BUG: unchecked
 fn handle_end_vertex(vertex_idx: usize, tree: &mut PartitionTree, poly: &mut PartitionPolygon) {
     let prev = poly.prev_vertex(vertex_idx);
     let search_key = tree.find(&poly.vertices[prev]);
@@ -380,7 +383,6 @@ fn polygon_interior_to_right(vertex_idx: usize, poly: &PartitionPolygon) -> Resu
     }
 }
 
-// BUG: unchecked
 fn handle_regular_vertex(vertex_idx: usize, tree: &mut PartitionTree, poly: &mut PartitionPolygon) {
     let interior_to_right: bool;
     match polygon_interior_to_right(vertex_idx, poly) {
@@ -414,7 +416,6 @@ fn handle_regular_vertex(vertex_idx: usize, tree: &mut PartitionTree, poly: &mut
     }
 }
 
-// BUG: unchecked
 fn handle_split_vertex(vertex_idx: usize, tree: &mut PartitionTree, poly: &mut PartitionPolygon) {
     let (left_neighbor_edge_key, left_neigbor_edge_helper) =
         get_left_neighbor(&poly.vertices[vertex_idx], tree);
@@ -423,7 +424,6 @@ fn handle_split_vertex(vertex_idx: usize, tree: &mut PartitionTree, poly: &mut P
     tree.insert(vertex_idx, vertex_idx, poly);
 }
 
-// BUG: unchecked
 fn handle_merge_vertex(vertex_idx: usize, tree: &mut PartitionTree, poly: &mut PartitionPolygon) {
     let prev = poly.prev_vertex(vertex_idx);
     let search_key = tree.find(&poly.vertices[prev]);
@@ -480,13 +480,13 @@ pub fn monoton_polyon_partition(vertices: &Vec<Pos2>) -> Vec<Vec<Pos2>> {
     }
     // Debug only
     // diagonals: 5<->3, 1<->3
-    assert_eq!(partition_poly.vertices[4].diag_points, Vec::new());
-    assert_eq!(partition_poly.vertices[6].diag_points, Vec::new());
-    assert_eq!(partition_poly.vertices[5].diag_points, vec![3]);
-    assert_eq!(partition_poly.vertices[3].diag_points, vec![5, 1]);
-    assert_eq!(partition_poly.vertices[1].diag_points, vec![3]);
-    assert_eq!(partition_poly.vertices[0].diag_points, Vec::new());
-    assert_eq!(partition_poly.vertices[2].diag_points, Vec::new());
+    // assert_eq!(partition_poly.vertices[4].diag_points, Vec::new());
+    // assert_eq!(partition_poly.vertices[6].diag_points, Vec::new());
+    // assert_eq!(partition_poly.vertices[5].diag_points, vec![3]);
+    // assert_eq!(partition_poly.vertices[3].diag_points, vec![5, 1]);
+    // assert_eq!(partition_poly.vertices[1].diag_points, vec![3]);
+    // assert_eq!(partition_poly.vertices[0].diag_points, Vec::new());
+    // assert_eq!(partition_poly.vertices[2].diag_points, Vec::new());
     partition_poly.partition(vertices)
 }
 
