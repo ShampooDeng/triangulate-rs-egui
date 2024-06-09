@@ -45,7 +45,7 @@ impl PartitionVertex {
         }
     }
 
-    fn insert_diagonal(&mut self, vertex_idx: usize) {
+    fn insert_diagnoal(&mut self, vertex_idx: usize) {
         self.diag_points.push(vertex_idx);
     }
 
@@ -53,7 +53,9 @@ impl PartitionVertex {
         (self.point.x * 100.).round() as i32
     }
 
-    fn sort_diagonals(&mut self, next: &Pos2, vertices: &Vertices) {
+    /// Sort diagnoals by their agnle relative to the line\
+    /// formed by self and its' next vertex in partition polygon in ccw.
+    fn sort_diagnoals(&mut self, next: &Pos2, vertices: &Vertices) {
         self.diag_points.sort_by(|a, b| {
             let cur = &self.point;
             let vertex_1 = vertices[*a];
@@ -89,6 +91,11 @@ fn vector_length(vector: (f32, f32)) -> f32 {
     (vector.0.powi(2) + vector.1.powi(2)).sqrt()
 }
 
+/// Compute the angle between vector1(cur -> next) 
+/// and vector2 (cur -> target).\
+/// The angle is in 0 to 2pi, from vector1 to vector2.\
+/// cur: current vertex\
+/// next: cur's next vertex in partition polygon
 fn compute_angle(cur: &Pos2, next: &Pos2, target: &Pos2) -> f32 {
     let ref_vector = (next.x - cur.x, next.y - cur.y);
     let target_vector = (target.x - cur.x, target.y - cur.y);
@@ -117,10 +124,12 @@ impl PartitionPolygon {
         }
     }
 
+    /// Get next vertex's index
     fn next_vertex(&self, idx: usize) -> usize {
         (idx + 1) % self.vertices.len()
     }
 
+    /// Get previous vertex's index
     fn prev_vertex(&self, idx: usize) -> usize {
         if idx == 0 {
             return self.vertices.len() - 1;
@@ -128,13 +137,15 @@ impl PartitionPolygon {
         idx - 1
     }
 
-    fn insert_diagonal(&mut self, idx1: usize, idx2: usize) {
-        // let a = self.vertices[idx1].point.clone();
-        // let b = self.vertices[idx2].point.clone();
-        self.vertices[idx1].insert_diagonal(idx2);
-        self.vertices[idx2].insert_diagonal(idx1);
+    /// Insert diagnoal between two vertices given
+    /// their index in partition polygon
+    fn insert_diagnoal(&mut self, idx1: usize, idx2: usize) {
+        self.vertices[idx1].insert_diagnoal(idx2);
+        self.vertices[idx2].insert_diagnoal(idx1);
     }
 
+    /// Build a partition polygon from a list of vertices
+    /// in ccw order.
     fn build_from_pts(&mut self, input: &Vec<Pos2>) {
         let input_iter = input.iter();
         for item in input_iter {
@@ -143,14 +154,14 @@ impl PartitionPolygon {
     }
 
     fn partition(&mut self, vertices: &Vertices) -> Vec<Vec<Pos2>> {
-        // HACK: change sort_diagonals's arg from PartitionVertex to Pos2,
+        // HACK: change sort_diagnoals's arg from PartitionVertex to Pos2,
         // since Vec<T> in PartitionVertex will cause multiple mutable
         // borrow of self, here, in this function.
         for idx in 0..self.vertices.len() {
             if self.vertices[idx].diag_points.len() != 0 {
                 let next_pos = self.vertices[(idx + 1) % self.vertices.len()].point.clone();
                 let cur = &mut self.vertices[idx];
-                cur.sort_diagonals(&next_pos, vertices);
+                cur.sort_diagnoals(&next_pos, vertices);
             }
         }
         let mut result: Vec<Vec<Pos2>> = Vec::new();
@@ -181,16 +192,6 @@ impl PartitionPolygon {
             }
         }
         idx
-        // if there are no diagonals at this vertex
-        //    push on the vertex
-        // else if the first diagonal closes the polygon
-        //    close the polygon
-        //    return the current vertex (NOT the other end of the diagonal)
-        // else
-        //    remove the first diagonal
-        //    recur, starting a new polygon at this vertex and return the
-        //      vertex where the new polygon ended
-        //    continue from the last vertex of the new polygon
     }
 }
 
@@ -274,6 +275,7 @@ impl PartitionTree {
     }
 }
 
+/// Get event vertex's left neighbor in the search tree
 fn get_left_neighbor(vertex: &PartitionVertex, tree: &PartitionTree) -> (i32, usize) {
     let key = tree.lower_bound(vertex);
     (key, tree.search_tree[&key].helper)
@@ -284,8 +286,9 @@ fn get_left_neighbor_helper(vertex: &PartitionVertex, tree: &PartitionTree) -> u
     tree.search_tree[&key].helper
 }
 
+/// Update an edge's helper in the search tree\
+/// given it's origin's x coordinates(key)
 fn update_helper(key: i32, new_helper: usize, tree: &mut PartitionTree) {
-    // let key = edge_ori.magnified_pos_x();
     if let Some(tree_entry) = tree.search_tree.get_mut(&key) {
         tree_entry.helper = new_helper;
     } else {
@@ -293,6 +296,8 @@ fn update_helper(key: i32, new_helper: usize, tree: &mut PartitionTree) {
     }
 }
 
+/// Assessing 3 adjacent vertices' orientation by comparing
+/// their slopes
 fn cmp_slope(p: &Pos2, q: &Pos2, r: &Pos2) -> Orientation {
     let slope_pq = (q.y - p.y) * (r.x - p.x);
     let slope_pr = (r.y - p.y) * (q.x - p.x);
@@ -309,6 +314,7 @@ fn cmp_slope(p: &Pos2, q: &Pos2, r: &Pos2) -> Orientation {
     }
 }
 
+/// Compare vertex's height with its left and right neighbors
 fn cmp_vertex_height(p: &Pos2, q: &Pos2, r: &Pos2) -> MiddleVertexStatus {
     match (q.y.ge(&p.y), q.y.le(&r.y)) {
         (true, false) => MiddleVertexStatus::Convex,
@@ -318,6 +324,8 @@ fn cmp_vertex_height(p: &Pos2, q: &Pos2, r: &Pos2) -> MiddleVertexStatus {
     }
 }
 
+/// Check a vertex's type by assessing their orientation
+/// (ccw, cw) and its position with respect to its two neighbor vertices.
 fn monoton_vertex_type(poly: &PartitionPolygon, idx: usize) -> VertexType {
     let prev: usize = poly.prev_vertex(idx);
     let next: usize = poly.next_vertex(idx);
@@ -333,6 +341,10 @@ fn monoton_vertex_type(poly: &PartitionPolygon, idx: usize) -> VertexType {
     }
 }
 
+/// Generate event queue of given vertices.\
+/// All vertices are sorted by their y coordinates (from top to bottom).\
+/// If vertices are at the same height, they will
+/// be sorted by x coordinates (from left to right).
 fn to_event_queue(input: &Vec<PartitionVertex>) -> Vec<usize> {
     let mut output = Vec::from_iter(0..input.len());
     output.sort_by(|a, b| {
@@ -363,13 +375,15 @@ fn handle_end_vertex(vertex_idx: usize, tree: &mut PartitionTree, poly: &mut Par
     let helper_prev_idx = tree.search_tree[&search_key].helper;
     match monoton_vertex_type(poly, helper_prev_idx) {
         VertexType::MergeVertex => {
-            poly.insert_diagonal(vertex_idx, helper_prev_idx);
+            poly.insert_diagnoal(vertex_idx, helper_prev_idx);
         }
         _ => {}
     }
     let _ = tree.erase(search_key);
 }
 
+/// Check if the polygon interior is in the right of regular vertex.\
+/// Assuming all vertices are sorted in CCW order.
 fn polygon_interior_to_right(vertex_idx: usize, poly: &PartitionPolygon) -> Result<bool, ()> {
     let prev: usize = poly.prev_vertex(vertex_idx);
     let next: usize = poly.next_vertex(vertex_idx);
@@ -396,7 +410,7 @@ fn handle_regular_vertex(vertex_idx: usize, tree: &mut PartitionTree, poly: &mut
         let helper_prev_idx = tree.search_tree[&search_key].helper;
         match monoton_vertex_type(poly, helper_prev_idx) {
             VertexType::MergeVertex => {
-                poly.insert_diagonal(vertex_idx, helper_prev_idx);
+                poly.insert_diagnoal(vertex_idx, helper_prev_idx);
             }
             _ => {}
         }
@@ -408,7 +422,7 @@ fn handle_regular_vertex(vertex_idx: usize, tree: &mut PartitionTree, poly: &mut
             get_left_neighbor(&poly.vertices[vertex_idx], tree);
         match monoton_vertex_type(poly, left_neigbor_edge_helper) {
             VertexType::MergeVertex => {
-                poly.insert_diagonal(vertex_idx, left_neigbor_edge_helper);
+                poly.insert_diagnoal(vertex_idx, left_neigbor_edge_helper);
             }
             _ => {}
         }
@@ -419,7 +433,7 @@ fn handle_regular_vertex(vertex_idx: usize, tree: &mut PartitionTree, poly: &mut
 fn handle_split_vertex(vertex_idx: usize, tree: &mut PartitionTree, poly: &mut PartitionPolygon) {
     let (left_neighbor_edge_key, left_neigbor_edge_helper) =
         get_left_neighbor(&poly.vertices[vertex_idx], tree);
-    poly.insert_diagonal(vertex_idx, left_neigbor_edge_helper);
+    poly.insert_diagnoal(vertex_idx, left_neigbor_edge_helper);
     update_helper(left_neighbor_edge_key, vertex_idx, tree);
     tree.insert(vertex_idx, vertex_idx, poly);
 }
@@ -430,7 +444,7 @@ fn handle_merge_vertex(vertex_idx: usize, tree: &mut PartitionTree, poly: &mut P
     let helper_prev_idx = tree.search_tree[&search_key].helper;
     match monoton_vertex_type(poly, helper_prev_idx) {
         VertexType::MergeVertex => {
-            poly.insert_diagonal(vertex_idx, helper_prev_idx);
+            poly.insert_diagnoal(vertex_idx, helper_prev_idx);
         }
         _ => {}
     }
@@ -439,7 +453,7 @@ fn handle_merge_vertex(vertex_idx: usize, tree: &mut PartitionTree, poly: &mut P
         get_left_neighbor(&poly.vertices[vertex_idx], tree);
     match monoton_vertex_type(poly, left_neigbor_edge_helper) {
         VertexType::MergeVertex => {
-            poly.insert_diagonal(vertex_idx, left_neigbor_edge_helper);
+            poly.insert_diagnoal(vertex_idx, left_neigbor_edge_helper);
         }
         _ => {}
     }
@@ -479,7 +493,7 @@ pub fn monoton_polyon_partition(vertices: &Vec<Pos2>) -> Vec<Vec<Pos2>> {
         }
     }
     // Debug only
-    // diagonals: 5<->3, 1<->3
+    // diagnoals: 5<->3, 1<->3
     // assert_eq!(partition_poly.vertices[4].diag_points, Vec::new());
     // assert_eq!(partition_poly.vertices[6].diag_points, Vec::new());
     // assert_eq!(partition_poly.vertices[5].diag_points, vec![3]);
@@ -608,7 +622,7 @@ mod tests {
         vertices.push(Pos2::new(10., 20.));
         vertices.push(Pos2::new(15., 10.));
         vertices.push(Pos2::new(8., 18.));
-        partition_vertex.sort_diagonals(&next, &vertices);
+        partition_vertex.sort_diagnoals(&next, &vertices);
         let res = partition_vertex.diag_points;
         let gts = vec![4,3,5,1,2,0];
         assert_eq!(res, gts);
