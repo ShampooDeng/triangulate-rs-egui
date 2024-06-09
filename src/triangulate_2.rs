@@ -81,7 +81,7 @@ impl PartitionVertex {
 
     fn has_unused_diag(&self) -> bool {
         if self.diag_points.len() == 0 {
-            return false
+            return false;
         }
         true
     }
@@ -91,7 +91,7 @@ fn vector_length(vector: (f32, f32)) -> f32 {
     (vector.0.powi(2) + vector.1.powi(2)).sqrt()
 }
 
-/// Compute the angle between vector1(cur -> next) 
+/// Compute the angle between vector1(cur -> next)
 /// and vector2 (cur -> target).\
 /// The angle is in 0 to 2pi, from vector1 to vector2.\
 /// cur: current vertex\
@@ -174,7 +174,7 @@ impl PartitionPolygon {
         let mut idx: usize = start;
         loop {
             new_polygon.push(self.vertices[idx].point);
-            if self.vertices[idx].has_unused_diag(){
+            if self.vertices[idx].has_unused_diag() {
                 let diag = self.vertices[idx].diag_points.pop().unwrap();
                 if diag != start {
                     idx = self.make_polygons(idx, result);
@@ -624,33 +624,35 @@ mod tests {
         vertices.push(Pos2::new(8., 18.));
         partition_vertex.sort_diagnoals(&next, &vertices);
         let res = partition_vertex.diag_points;
-        let gts = vec![4,3,5,1,2,0];
+        let gts = vec![4, 3, 5, 1, 2, 0];
         assert_eq!(res, gts);
     }
 
     #[test]
     fn test_monotone_partition() {
         let mut pts = Vec::new();
-        pts.push(Pos2::new(1., 0.)); // 0
-        pts.push(Pos2::new(2., 1.)); // 1
-        pts.push(Pos2::new(3., 0.)); // 2
-        pts.push(Pos2::new(5., 1.5)); // 3
-        pts.push(Pos2::new(3.5, 3.)); // 4
-        pts.push(Pos2::new(1.5, 1.5)); // 5
-        pts.push(Pos2::new(1., 2.4)); // 6
+        pts.push(Pos2::new(157., 29.)); // 0
+        pts.push(Pos2::new(308., 173.)); // 1
+        pts.push(Pos2::new(481., 49.)); // 2
+        pts.push(Pos2::new(624., 180.)); // 3
+        pts.push(Pos2::new(500., 349.)); // 4
+        pts.push(Pos2::new(378., 286.)); // 5
+        pts.push(Pos2::new(185., 333.)); // 6
         let result = monoton_polyon_partition(&pts);
         // assert_eq!(result[0], Vec::new());
         // assert_eq!(result[1], Vec::new());
         // assert_eq!(result[2], Vec::new());
+        // assert_eq!(result.len() , 3);
         let mut res_iter = result.iter();
         assert_eq!(res_iter.next().unwrap(), &pts[1..4]);
         assert_eq!(res_iter.next().unwrap(), &pts[3..6]);
         let gt = vec![
-            Pos2::new(1., 0.),
-            Pos2::new(2., 1.),
-            Pos2::new(5., 1.5),
-            Pos2::new(1.5, 1.5),
-            Pos2::new(1., 2.4),
+            // 01356
+            Pos2::new(157., 29.),
+            Pos2::new(308., 173.),
+            Pos2::new(624., 180.),
+            Pos2::new(378., 286.),
+            Pos2::new(185., 333.),
         ];
         assert_eq!(res_iter.next().unwrap(), &gt);
     }

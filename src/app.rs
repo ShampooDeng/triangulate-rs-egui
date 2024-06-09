@@ -2,8 +2,8 @@ use eframe::egui::*;
 use kd_tree::KdTree2;
 use log::debug;
 
-use crate::dcel::DCEL;
-use crate::triangulate::make_monotone;
+// use crate::dcel::DCEL;
+// use crate::triangulate::make_monotone;
 use crate::triangulate_2::monoton_polyon_partition;
 use crate::TransformPos;
 
@@ -11,9 +11,12 @@ use crate::TransformPos;
 
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[cfg_attr(feature = "serde", serde(default))]
+
+type Points = Vec<Pos2>;
 pub struct Painting {
     /// in 0-1 normalized coordinates
-    points: Vec<Pos2>,
+    points: Points,
+    polygon_partition: Vec<Points>,
     stroke: Stroke,
     radius: f32,
     kdtree: KdTree2<[f32; 2]>,
@@ -28,7 +31,17 @@ pub struct Painting {
 impl Default for Painting {
     fn default() -> Self {
         Self {
-            points: Default::default(),
+            // points: Default::default(),
+            points: vec![
+                Pos2::new(157., 29.), // 0
+                Pos2::new(308., 173.), // 1
+                Pos2::new(481., 49.), // 2
+                Pos2::new(624., 180.), // 3
+                Pos2::new(500., 349.), // 4
+                Pos2::new(378., 286.), // 5
+                Pos2::new(185., 333.), // 6
+            ],
+            polygon_partition: Vec::new(),
             stroke: Stroke::new(1.0, Color32::from_rgb(25, 200, 100)),
             radius: 5.,
             kdtree: KdTree2::default(),
@@ -108,20 +121,28 @@ impl Painting {
         }
     }
 
-    fn draw_polygon(&mut self, p: &Painter) {
+    fn draw_polygon(&self, pts: &Points, p: &Painter) {
         // TODO: use the polygons generated from dcel to draw polygons
-        let mut points = self
-            .points
+        let mut points = pts
             .iter()
             // Transpose vertex coordinate to gui's coordiante system.
-            .map(|point| self.to_screen() * *point)             
+            .map(|point| self.to_screen() * *point)
             .collect::<Vec<Pos2>>();
         // Join the last vertex and the first vertex to seal the polygon.
         if self.points.len() > 2 {
-            points.push(self.to_screen() * self.points[0]);
+            points.push(self.to_screen() * pts[0]);
         }
         let polygon_outline = Shape::line(points, self.stroke);
         p.add(polygon_outline);
+    }
+
+    fn draw_polygon_partition(&self, p: &Painter) {
+        if self.polygon_partition.is_empty() {
+            return;
+        }
+        for partition in self.polygon_partition.iter() {
+            self.draw_polygon(partition, p);
+        }
     }
 
     /// Define Gui widget layout, and button click event.
@@ -135,14 +156,12 @@ impl Painting {
             ui.separator();
             if ui.button("Clear Painting").clicked() {
                 self.points.clear();
+                self.polygon_partition.clear();
                 self.focused_point = pos2(-1., -1.);
             }
             if ui.button("Triangulate Polygon").clicked() {
                 self.triangulating = true;
-                // TODO: add text to inform user that "Triangulation is in process"
-                // let dcel = DCEL::build_from_pts(&self.points);
-                // make_monotone(&dcel);
-                monoton_polyon_partition(&self.points);
+                self.polygon_partition = monoton_polyon_partition(&self.points);
                 self.triangulating = false;
             }
             if ui.button("3-coloring triangles").clicked() {
@@ -208,7 +227,8 @@ impl Painting {
 
         // Drawing ui content
         self.draw_vertices(&painter);
-        self.draw_polygon(&painter);
+        self.draw_polygon(&self.points,&painter);
+        self.draw_polygon_partition(&painter);
         self.mark_selected_point(&painter);
 
         response
