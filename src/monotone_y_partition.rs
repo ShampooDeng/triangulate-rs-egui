@@ -38,7 +38,7 @@ struct PartitionVertex {
 impl PartitionVertex {
     fn new(input: &Pos2) -> Self {
         PartitionVertex {
-            point: input.clone(),
+            point: *input, // Pos2 has copy trait, so just dereference it.
             // NOTE: Vec<T> can't be deep copied
             diag_points: Vec::new(),
             current: 0,
@@ -80,7 +80,7 @@ impl PartitionVertex {
     }
 
     fn has_unused_diag(&self) -> bool {
-        if self.diag_points.len() == 0 {
+        if self.diag_points.is_empty() {
             return false;
         }
         true
@@ -146,7 +146,7 @@ impl PartitionPolygon {
 
     /// Build a partition polygon from a list of vertices
     /// in ccw order.
-    fn build_from_pts(&mut self, input: &Vec<Pos2>) {
+    fn build_from_pts(&mut self, input: &[Pos2]) {
         let input_iter = input.iter();
         for item in input_iter {
             self.vertices.push(PartitionVertex::new(item));
@@ -158,8 +158,8 @@ impl PartitionPolygon {
         // since Vec<T> in PartitionVertex will cause multiple mutable
         // borrow of self, here, in this function.
         for idx in 0..self.vertices.len() {
-            if self.vertices[idx].diag_points.len() != 0 {
-                let next_pos = self.vertices[(idx + 1) % self.vertices.len()].point.clone();
+            if !self.vertices[idx].diag_points.is_empty() {
+                let next_pos = self.vertices[(idx + 1) % self.vertices.len()].point;
                 let cur = &mut self.vertices[idx];
                 cur.sort_diagnoals(&next_pos, vertices);
             }
@@ -255,7 +255,7 @@ impl PartitionTree {
 
     /// Erase an edge from tree
     pub fn erase(&mut self, entry_key: i32) -> Result<(), i32> {
-        if let None = self.search_tree.remove(&entry_key) {
+        if self.search_tree.remove(&entry_key).is_none() {
             return Err(entry_key);
         }
         self.update_keys();
@@ -266,7 +266,7 @@ impl PartitionTree {
     pub fn lower_bound(&self, vertex: &PartitionVertex) -> i32 {
         // HACK: return 0 when search tree is empty
         // Will this cause any bug?
-        if self.search_tree.len() == 0 {
+        if self.search_tree.is_empty() {
             return 0;
         }
         let pred = vertex.magnified_pos_x();
@@ -345,7 +345,7 @@ fn monoton_vertex_type(poly: &PartitionPolygon, idx: usize) -> VertexType {
 /// All vertices are sorted by their y coordinates (from top to bottom).\
 /// If vertices are at the same height, they will
 /// be sorted by x coordinates (from left to right).
-fn to_event_queue(input: &Vec<PartitionVertex>) -> Vec<usize> {
+fn to_event_queue(input: &[PartitionVertex]) -> Vec<usize> {
     let mut output = Vec::from_iter(0..input.len());
     output.sort_by(|a, b| {
         let a_pos = input[*a].point;
@@ -373,11 +373,8 @@ fn handle_end_vertex(vertex_idx: usize, tree: &mut PartitionTree, poly: &mut Par
     let prev = poly.prev_vertex(vertex_idx);
     let search_key = tree.find(&poly.vertices[prev]);
     let helper_prev_idx = tree.search_tree[&search_key].helper;
-    match monoton_vertex_type(poly, helper_prev_idx) {
-        VertexType::MergeVertex => {
-            poly.insert_diagnoal(vertex_idx, helper_prev_idx);
-        }
-        _ => {}
+    if let VertexType::MergeVertex = monoton_vertex_type(poly, helper_prev_idx) {
+        poly.insert_diagnoal(vertex_idx, helper_prev_idx);
     }
     let _ = tree.erase(search_key);
 }
@@ -398,21 +395,17 @@ fn polygon_interior_to_right(vertex_idx: usize, poly: &PartitionPolygon) -> Resu
 }
 
 fn handle_regular_vertex(vertex_idx: usize, tree: &mut PartitionTree, poly: &mut PartitionPolygon) {
-    let interior_to_right: bool;
-    match polygon_interior_to_right(vertex_idx, poly) {
-        Ok(res) => interior_to_right = res,
+    let interior_to_right =  match polygon_interior_to_right(vertex_idx, poly) {
+        Ok(res) => res,
         Err(_) => panic!("wrong middlevertex status"),
-    }
+    };
     if interior_to_right {
         debug!("interior is right to vertex{}", vertex_idx);
         let prev = poly.prev_vertex(vertex_idx);
         let search_key = tree.find(&poly.vertices[prev]);
         let helper_prev_idx = tree.search_tree[&search_key].helper;
-        match monoton_vertex_type(poly, helper_prev_idx) {
-            VertexType::MergeVertex => {
-                poly.insert_diagnoal(vertex_idx, helper_prev_idx);
-            }
-            _ => {}
+        if let VertexType::MergeVertex = monoton_vertex_type(poly, helper_prev_idx) {
+            poly.insert_diagnoal(vertex_idx, helper_prev_idx);
         }
         let _ = tree.erase(search_key);
         tree.insert(vertex_idx, vertex_idx, poly);
@@ -420,11 +413,8 @@ fn handle_regular_vertex(vertex_idx: usize, tree: &mut PartitionTree, poly: &mut
         debug!("interior is left to vertex{}", vertex_idx);
         let (left_neighbor_edge_key, left_neigbor_edge_helper) =
             get_left_neighbor(&poly.vertices[vertex_idx], tree);
-        match monoton_vertex_type(poly, left_neigbor_edge_helper) {
-            VertexType::MergeVertex => {
-                poly.insert_diagnoal(vertex_idx, left_neigbor_edge_helper);
-            }
-            _ => {}
+        if let VertexType::MergeVertex = monoton_vertex_type(poly, left_neigbor_edge_helper) {
+            poly.insert_diagnoal(vertex_idx, left_neigbor_edge_helper);
         }
         update_helper(left_neighbor_edge_key, vertex_idx, tree);
     }
@@ -442,20 +432,14 @@ fn handle_merge_vertex(vertex_idx: usize, tree: &mut PartitionTree, poly: &mut P
     let prev = poly.prev_vertex(vertex_idx);
     let search_key = tree.find(&poly.vertices[prev]);
     let helper_prev_idx = tree.search_tree[&search_key].helper;
-    match monoton_vertex_type(poly, helper_prev_idx) {
-        VertexType::MergeVertex => {
-            poly.insert_diagnoal(vertex_idx, helper_prev_idx);
-        }
-        _ => {}
+    if let VertexType::MergeVertex = monoton_vertex_type(poly, helper_prev_idx) {
+        poly.insert_diagnoal(vertex_idx, helper_prev_idx);
     }
     let _ = tree.erase(search_key);
     let (left_neighbor_edge_key, left_neigbor_edge_helper) =
         get_left_neighbor(&poly.vertices[vertex_idx], tree);
-    match monoton_vertex_type(poly, left_neigbor_edge_helper) {
-        VertexType::MergeVertex => {
-            poly.insert_diagnoal(vertex_idx, left_neigbor_edge_helper);
-        }
-        _ => {}
+    if let VertexType::MergeVertex = monoton_vertex_type(poly, left_neigbor_edge_helper) {
+        poly.insert_diagnoal(vertex_idx, left_neigbor_edge_helper);
     }
     update_helper(left_neighbor_edge_key, vertex_idx, tree);
 }
@@ -467,8 +451,7 @@ pub fn monoton_polyon_partition(vertices: &Vec<Pos2>) -> Vec<Vec<Pos2>> {
     let mut tree = PartitionTree::new();
 
     let mut event_queue = to_event_queue(&partition_poly.vertices);
-    while !event_queue.is_empty() {
-        let event_idx = event_queue.pop().unwrap();
+    while let Some(event_idx) = event_queue.pop() {
         match monoton_vertex_type(&partition_poly, event_idx) {
             VertexType::StartVertex => {
                 debug!("vertex{} is start vertex", event_idx);
@@ -592,7 +575,7 @@ mod tests {
 
         let results_string = results
             .iter()
-            .map(|x| vertex_type_to_string(x))
+            .map(vertex_type_to_string)
             .collect::<Vec<String>>();
         let gts = vec!["start", "start", "merge", "regular", "split", "end", "end"];
         assert_eq!(results_string, gts);
@@ -613,7 +596,7 @@ mod tests {
     #[test]
     fn test_sort_diag() {
         let mut partition_vertex = PartitionVertex::new(&Pos2::new(10., 10.));
-        partition_vertex.diag_points = (0..6).into_iter().collect();
+        partition_vertex.diag_points = (0..6).collect();
         let next = Pos2::new(12., 8.);
         let mut vertices = Vec::new();
         vertices.push(Pos2::new(6., 7.));
