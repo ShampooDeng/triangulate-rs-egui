@@ -2,9 +2,7 @@
 
 //https://doc.rust-lang.org/book/ch07-03-paths-for-referring-to-an-item-in-the-module-tree.html#best-practices-for-packages-with-a-binary-and-a-library
 mod app;
-mod dcel;
-mod triangulate;
-mod triangulate_2;
+mod monotone_y_partition;
 
 use std::collections::binary_heap::Iter;
 

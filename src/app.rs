@@ -4,7 +4,7 @@ use log::debug;
 
 // use crate::dcel::DCEL;
 // use crate::triangulate::make_monotone;
-use crate::triangulate_2::monoton_polyon_partition;
+use crate::monotone_y_partition::monoton_polyon_partition;
 use crate::TransformPos;
 
 // TODO: more detailed comments
