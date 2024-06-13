@@ -495,7 +495,7 @@ mod tests {
         monoton_polyon_partition, to_event_queue, PartitionPolygon, PartitionTree, PartitionVertex,
         VertexType,
     };
-    use crate::triangulate_2::monoton_vertex_type;
+    use crate::monotone_y_partition::monoton_vertex_type;
     use egui::Pos2;
 
     #[test]
