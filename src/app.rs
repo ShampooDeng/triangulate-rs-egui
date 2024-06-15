@@ -2,9 +2,8 @@ use eframe::egui::*;
 use kd_tree::KdTree2;
 use log::debug;
 
-// use crate::dcel::DCEL;
-// use crate::triangulate::make_monotone;
-use crate::monotone_y_partition::monoton_polyon_partition;
+use crate::monotone_y_partition::monoton_polygon_partition;
+use crate::monotone_y_partition::polygon_triangulation;
 use crate::TransformPos;
 
 // TODO: more detailed comments
@@ -13,6 +12,19 @@ use crate::TransformPos;
 #[cfg_attr(feature = "serde", serde(default))]
 
 type Points = Vec<Pos2>;
+
+fn example_poly() -> Points{
+    vec![
+        Pos2::new(157., 29.), // 0
+        Pos2::new(308., 173.), // 1
+        Pos2::new(481., 49.), // 2
+        Pos2::new(624., 180.), // 3
+        Pos2::new(500., 349.), // 4
+        Pos2::new(378., 286.), // 5
+        Pos2::new(185., 333.), // 6
+    ]
+}
+
 pub struct Painting {
     /// in 0-1 normalized coordinates
     points: Points,
@@ -32,15 +44,7 @@ impl Default for Painting {
     fn default() -> Self {
         Self {
             // points: Default::default(),
-            points: vec![
-                Pos2::new(157., 29.), // 0
-                Pos2::new(308., 173.), // 1
-                Pos2::new(481., 49.), // 2
-                Pos2::new(624., 180.), // 3
-                Pos2::new(500., 349.), // 4
-                Pos2::new(378., 286.), // 5
-                Pos2::new(185., 333.), // 6
-            ],
+            points: example_poly(),
             polygon_partition: Vec::new(),
             stroke: Stroke::new(1.0, Color32::from_rgb(25, 200, 100)),
             radius: 5.,
@@ -122,7 +126,6 @@ impl Painting {
     }
 
     fn draw_polygon(&self, pts: &Points, p: &Painter) {
-        // TODO: use the polygons generated from dcel to draw polygons
         let mut points = pts
             .iter()
             // Transpose vertex coordinate to gui's coordiante system.
@@ -161,7 +164,8 @@ impl Painting {
             }
             if ui.button("Triangulate Polygon").clicked() {
                 self.triangulating = true;
-                self.polygon_partition = monoton_polyon_partition(&self.points);
+                // self.polygon_partition = monoton_polygon_partition(&self.points);
+                self.polygon_partition = polygon_triangulation(&self.points);
                 self.triangulating = false;
             }
             if ui.button("3-coloring triangles").clicked() {
@@ -226,9 +230,9 @@ impl Painting {
         }
 
         // Drawing ui content
-        self.draw_vertices(&painter);
         self.draw_polygon(&self.points,&painter);
         self.draw_polygon_partition(&painter);
+        self.draw_vertices(&painter);
         self.mark_selected_point(&painter);
 
         response

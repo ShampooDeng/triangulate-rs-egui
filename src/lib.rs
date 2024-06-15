@@ -3,8 +3,10 @@
 //https://doc.rust-lang.org/book/ch07-03-paths-for-referring-to-an-item-in-the-module-tree.html#best-practices-for-packages-with-a-binary-and-a-library
 mod app;
 mod monotone_y_partition;
+mod monotone_triangulation;
+mod triangle_base;
 
-use std::collections::binary_heap::Iter;
+// use std::collections::binary_heap::Iter;
 
 pub use app::Painting;
 use egui::{pos2, vec2, Pos2, Vec2};
