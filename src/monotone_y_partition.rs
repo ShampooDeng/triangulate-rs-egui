@@ -1,6 +1,6 @@
 use core::panic;
 use egui::Pos2;
-use log::debug;
+use log::{debug, info};
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::f32::consts::PI;
@@ -83,7 +83,10 @@ impl PartitionVertex {
         }
     }
 
-    fn insert_diagnoal(&mut self, vertex_idx: usize) {
+    fn insert_diagonal(&mut self, vertex_idx: usize) {
+        if let Some(_) = self.diag_points.iter().find(|&&x| x==vertex_idx) {
+            return;
+        }
         self.diag_points.push(vertex_idx);
         self.unused_diag_count += 1;
     }
@@ -92,7 +95,7 @@ impl PartitionVertex {
         (self.point.x * 100.).round() as i32
     }
 
-    /// Sort diagnoals in ccw order, by their agnle relative to the line,\
+    /// Sort diagonals in ccw order, by their agnle relative to the line,\
     /// formed by current vertex and its' next vertex in polygon.
     fn sort_diag(&mut self, next: &Pos2, vertices: &Vertices) {
         self.diag_points.sort_by(|a, b| {
@@ -181,12 +184,15 @@ impl PartitionPolygon {
         }
     }
 
-    /// Insert diagnoal between two vertices given
+    /// Insert diagonal between two vertices given
     /// their index in partition polygon
-    fn insert_diagnoal(&mut self, idx1: usize, idx2: usize) {
-        debug!("insert diagnoal between {} and {}", idx1, idx2);
-        self.vertices[idx1].insert_diagnoal(idx2);
-        self.vertices[idx2].insert_diagnoal(idx1);
+    fn insert_diagonal(&mut self, idx1: usize, idx2: usize) {
+        if self.next(idx1) == idx2 || self.prev(idx1) == idx2 {
+            return;
+        }
+        info!("insert diagonal between {} and {}", idx1, idx2);
+        self.vertices[idx1].insert_diagonal(idx2);
+        self.vertices[idx2].insert_diagonal(idx1);
     }
 
     /// Build a partition polygon from a list of vertices
@@ -199,6 +205,7 @@ impl PartitionPolygon {
     }
 
     fn reset_unused_diag_counts(&mut self) {
+        info!("reset polygon vertices' diag count");
         for vertex in self.vertices.iter_mut() {
             vertex.reset_unused_diag_count();
         }
@@ -209,7 +216,10 @@ impl PartitionPolygon {
         // TODO: description for this function
         let mut new_polygon: Vec<usize> = Vec::new();
         let mut idx: usize = start;
-        debug!("vertex{} has unused diag:{}", idx, self.vertices[idx].unused_diag_count);
+        debug!(
+            "vertex{} has unused diag:{}",
+            idx, self.vertices[idx].unused_diag_count
+        );
         loop {
             new_polygon.push(idx);
             if self.vertices[idx].has_unused_diag() {
@@ -224,9 +234,8 @@ impl PartitionPolygon {
             } else {
                 idx = (idx + 1) % self.vertices.len();
             }
-            
-            //???: is this necessary
-            if idx == start {
+
+            if idx == start && new_polygon.len() > 2 {
                 debug!("push into result:{:?}", new_polygon);
                 result.push(new_polygon);
                 break;
@@ -247,7 +256,8 @@ impl PartitionPolygon {
         result_pos
     }
 
-    fn sort_diagnoals(&mut self, vertices: &Vertices) {
+    fn sort_diagonals(&mut self, vertices: &Vertices) {
+        info!("sort polygon vertices' diag");
         for idx in 0..self.vertices.len() {
             if !self.vertices[idx].diag_points.is_empty() {
                 let next_pos = self.vertices[(idx + 1) % self.vertices.len()].point;
@@ -260,11 +270,12 @@ impl PartitionPolygon {
 
     /// Output partitions described by a vector of vertices' coordinates
     fn partition(&mut self, vertices: &Vertices) -> Vec<Vec<Pos2>> {
-        // HACK: change sort_diagnoals's arg from PartitionVertex to Pos2,
+        // HACK: change sort_diagonals's arg from PartitionVertex to Pos2,
         // since Vec<T> in PartitionVertex will cause multiple mutable
         // borrow of self, here, in this function.
-        self.sort_diagnoals(vertices);
+        self.sort_diagonals(vertices);
         let mut result: Vec<Vec<usize>> = Vec::new();
+        info!("---start making polygons---");
         let ret = self.make_polygons(0, &mut result);
         debug!("the return of make_polygons:{}", ret);
         self.reset_unused_diag_counts();
@@ -447,7 +458,7 @@ fn handle_end_vertex(vertex_idx: usize, tree: &mut PartitionTree, poly: &mut Par
     let search_key = tree.find(&poly.vertices[prev]);
     let helper_prev_idx = tree.search_tree[&search_key].helper;
     if let VertexType::MergeVertex = monoton_vertex_type(poly, helper_prev_idx) {
-        poly.insert_diagnoal(vertex_idx, helper_prev_idx);
+        poly.insert_diagonal(vertex_idx, helper_prev_idx);
     }
     let _ = tree.erase(search_key);
 }
@@ -478,16 +489,19 @@ fn handle_regular_vertex(vertex_idx: usize, tree: &mut PartitionTree, poly: &mut
         let search_key = tree.find(&poly.vertices[prev]);
         let helper_prev_idx = tree.search_tree[&search_key].helper;
         if let VertexType::MergeVertex = monoton_vertex_type(poly, helper_prev_idx) {
-            poly.insert_diagnoal(vertex_idx, helper_prev_idx);
+            poly.insert_diagonal(vertex_idx, helper_prev_idx);
         }
         let _ = tree.erase(search_key);
         tree.insert(vertex_idx, vertex_idx, poly);
     } else {
         debug!("interior is left to vertex{}", vertex_idx);
+        debug!("tree search key before search: {:?}", tree.search_tree.keys());
+        // BUG: If a regular vertex is colinear to a neighbor end vertex,
+        // then "no entry found for key" or "attempt to subtract with overflow in line 364"
         let (left_neighbor_edge_key, left_neigbor_edge_helper) =
             get_left_neighbor(&poly.vertices[vertex_idx], tree);
         if let VertexType::MergeVertex = monoton_vertex_type(poly, left_neigbor_edge_helper) {
-            poly.insert_diagnoal(vertex_idx, left_neigbor_edge_helper);
+            poly.insert_diagonal(vertex_idx, left_neigbor_edge_helper);
         }
         update_helper(left_neighbor_edge_key, vertex_idx, tree);
     }
@@ -496,7 +510,7 @@ fn handle_regular_vertex(vertex_idx: usize, tree: &mut PartitionTree, poly: &mut
 fn handle_split_vertex(vertex_idx: usize, tree: &mut PartitionTree, poly: &mut PartitionPolygon) {
     let (left_neighbor_edge_key, left_neigbor_edge_helper) =
         get_left_neighbor(&poly.vertices[vertex_idx], tree);
-    poly.insert_diagnoal(vertex_idx, left_neigbor_edge_helper);
+    poly.insert_diagonal(vertex_idx, left_neigbor_edge_helper);
     update_helper(left_neighbor_edge_key, vertex_idx, tree);
     tree.insert(vertex_idx, vertex_idx, poly);
 }
@@ -506,40 +520,41 @@ fn handle_merge_vertex(vertex_idx: usize, tree: &mut PartitionTree, poly: &mut P
     let search_key = tree.find(&poly.vertices[prev]);
     let helper_prev_idx = tree.search_tree[&search_key].helper;
     if let VertexType::MergeVertex = monoton_vertex_type(poly, helper_prev_idx) {
-        poly.insert_diagnoal(vertex_idx, helper_prev_idx);
+        poly.insert_diagonal(vertex_idx, helper_prev_idx);
     }
     let _ = tree.erase(search_key);
     let (left_neighbor_edge_key, left_neigbor_edge_helper) =
         get_left_neighbor(&poly.vertices[vertex_idx], tree);
     if let VertexType::MergeVertex = monoton_vertex_type(poly, left_neigbor_edge_helper) {
-        poly.insert_diagnoal(vertex_idx, left_neigbor_edge_helper);
+        poly.insert_diagonal(vertex_idx, left_neigbor_edge_helper);
     }
     update_helper(left_neighbor_edge_key, vertex_idx, tree);
 }
 
-fn monoton_partition(mut partition_poly: &mut PartitionPolygon) {
+fn monotone_partition(mut partition_poly: &mut PartitionPolygon) {
     let mut tree = PartitionTree::new();
     let mut event_queue = to_event_queue(&partition_poly.vertices);
+    debug!("monotone partition event queue:{:?}", event_queue);
     while let Some(event_idx) = event_queue.pop() {
         match monoton_vertex_type(&partition_poly, event_idx) {
             VertexType::StartVertex => {
-                debug!("vertex{} is start vertex", event_idx);
+                info!("vertex{} is start vertex", event_idx);
                 handle_start_vertex(event_idx, &mut tree, &partition_poly);
             }
             VertexType::EndVertex => {
-                debug!("vertex{} is end vertex", event_idx);
+                info!("vertex{} is end vertex", event_idx);
                 handle_end_vertex(event_idx, &mut tree, &mut partition_poly);
             }
             VertexType::RegularVetex => {
-                debug!("vertex{} is regular vertex", event_idx);
+                info!("vertex{} is regular vertex", event_idx);
                 handle_regular_vertex(event_idx, &mut tree, &mut partition_poly);
             }
             VertexType::SplitVertex => {
-                debug!("vertex{} is split vertex", event_idx);
+                info!("vertex{} is split vertex", event_idx);
                 handle_split_vertex(event_idx, &mut tree, &mut partition_poly);
             }
             VertexType::MergeVertex => {
-                debug!("vertex{} is merge vertex", event_idx);
+                info!("vertex{} is merge vertex", event_idx);
                 handle_merge_vertex(event_idx, &mut tree, &mut partition_poly);
             }
         }
@@ -551,9 +566,9 @@ pub fn monoton_polygon_partition(vertices: &Vec<Pos2>) -> Vec<Vec<Pos2>> {
     // let vertices_rc = vertices.iter().map(|x| Rc::new(x.clone()));
     partition_poly.build_from_pts(vertices);
 
-    monoton_partition(&mut partition_poly);
+    monotone_partition(&mut partition_poly);
     // Debug only
-    // diagnoals: 5<->3, 1<->3
+    // diagonals: 5<->3, 1<->3
     // assert_eq!(partition_poly.vertices[4].diag_points, Vec::new());
     // assert_eq!(partition_poly.vertices[6].diag_points, Vec::new());
     // assert_eq!(partition_poly.vertices[5].diag_points, vec![3]);
@@ -567,7 +582,7 @@ pub fn monoton_polygon_partition(vertices: &Vec<Pos2>) -> Vec<Vec<Pos2>> {
 /// Check if the Monotone polygon's interior is right to a vertex
 fn mono_interior_to_right(
     idx: usize,
-    mono_poly: &[usize],
+    top_vertex_idx: usize,
     vertices: &Vec<Pos2>,
 ) -> Result<bool, ()> {
     // let prev: usize = mono_poly.prev(idx);
@@ -580,12 +595,12 @@ fn mono_interior_to_right(
     //     MiddleVertexStatus::GradientUp => Ok(false),
     //     _ => Err(()),
     // }
-    let mono_top_x = vertices[*mono_poly.last().unwrap()].x;
+    let mono_top_x = vertices[top_vertex_idx].x;
     let target_x = vertices[idx].x;
     let result = target_x.partial_cmp(&mono_top_x).unwrap();
     match result {
-        Ordering::Less => Ok(false),
-        Ordering::Greater => Ok(true),
+        Ordering::Less => Ok(true),
+        Ordering::Greater => Ok(false),
         Ordering::Equal => Err(()),
     }
 }
@@ -593,13 +608,13 @@ fn mono_interior_to_right(
 fn on_same_side(
     idx1: usize,
     idx2: usize,
-    mono_poly: &[usize],
+    top_vertex_idx: usize,
     vertices: &Vec<Pos2>,
 ) -> Option<WhichSide> {
-    let result1 = mono_interior_to_right(idx1, mono_poly, vertices).unwrap_or_else(|_err| {
+    let result1 = mono_interior_to_right(idx1, top_vertex_idx, vertices).unwrap_or_else(|_err| {
         panic!("processing vertex {idx1}");
     });
-    let result2 = mono_interior_to_right(idx2, mono_poly, vertices).unwrap_or_else(|_err| {
+    let result2 = mono_interior_to_right(idx2, top_vertex_idx, vertices).unwrap_or_else(|_err| {
         panic!("processing vertex {idx2}");
     });
     match (result1, result2) {
@@ -619,12 +634,14 @@ fn inside_mono_poly(
 ) -> bool {
     let orientation: Orientation;
     if let WhichSide::Left = side {
+        debug!("on left side");
         orientation = cmp_slope(&vertices[lastlast], &vertices[last], &vertices[cur]);
     } else {
+        debug!("on right side");
         orientation = cmp_slope(&vertices[cur], &vertices[last], &vertices[lastlast]);
     }
     match (side, orientation) {
-        (WhichSide::Left, ClockWise) => true,
+        (WhichSide::Left, CounterClockWise) => true,
         (WhichSide::Right, CounterClockWise) => true,
         _ => false,
     }
@@ -655,12 +672,14 @@ fn triangulate_monotone(
         }
         result
     });
-    debug!("event_stack: {:?}", event_stack);
+    debug!("event_stack after sort: {:?}", event_stack);
 
     let mut process_stack: Vec<usize> = Vec::new();
-    process_stack.push(event_stack.pop().unwrap()); // push event_vertex1
+    let top_vertex = event_stack.pop().unwrap();
+    process_stack.push(top_vertex); // push event_vertex1
     let mut prev_event_vertex = event_stack.pop().unwrap(); // save event_vertex2
     process_stack.push(prev_event_vertex); // push event_vertex2
+
     while let Some(event_vertex) = event_stack.pop() {
         debug!("processing event vertex{}", event_vertex);
         debug!("process stack: {:?}", process_stack);
@@ -669,7 +688,7 @@ fn triangulate_monotone(
         if let Some(side) = on_same_side(
             event_vertex,
             *process_stack.last().unwrap(),
-            monotone_poly,
+            top_vertex,
             vertices,
         ) {
             debug!(
@@ -680,20 +699,19 @@ fn triangulate_monotone(
             let mut last = process_stack.pop().unwrap();
             while let Some(lastlast) = process_stack.pop() {
                 // let lastlast = *process_stack.last().unwrap();
-                // ???: is inside mono poly correct?
                 if inside_mono_poly(event_vertex, last, lastlast, &side, vertices) {
-                    partition_poly.insert_diagnoal(lastlast, event_vertex)
+                    partition_poly.insert_diagonal(lastlast, event_vertex);
+                    last = lastlast;
                 } else {
                     process_stack.push(lastlast);
                     break;
                 }
-                last = lastlast;
             }
             process_stack.push(last);
             process_stack.push(event_vertex);
         } else {
             while let Some(vertex_idx) = process_stack.pop() {
-                partition_poly.insert_diagnoal(vertex_idx, event_vertex);
+                partition_poly.insert_diagonal(vertex_idx, event_vertex);
             }
             process_stack.push(prev_event_vertex);
             process_stack.push(event_vertex);
@@ -708,7 +726,7 @@ fn triangulate_monotone(
     let event_stack_bottom = event_stack.pop().unwrap();
     if process_stack.len() > 2 {
         for idx in process_stack[1..process_stack.len() - 1].iter() {
-            partition_poly.insert_diagnoal(event_stack_bottom, *idx);
+            partition_poly.insert_diagonal(event_stack_bottom, *idx);
         }
     }
 }
@@ -717,14 +735,15 @@ pub fn polygon_triangulation(vertices: &Vec<Pos2>) -> Vec<Vec<Pos2>> {
     let mut partition_poly = PartitionPolygon::new();
     partition_poly.build_from_pts(vertices);
 
-    monoton_partition(&mut partition_poly);
-    partition_poly.sort_diagnoals(vertices);
+    info!("---start monotone partition---");
+    monotone_partition(&mut partition_poly);
+    partition_poly.sort_diagonals(vertices);
     let mut monotone_polygons: Vec<Vec<usize>> = Vec::new();
     partition_poly.make_polygons(0, &mut monotone_polygons);
     partition_poly.reset_unused_diag_counts();
-    debug!("start triangulate monotone polygon");
+    info!("---start triangulate monotone polygon---");
     while let Some(monotone_poly) = monotone_polygons.pop() {
-        debug!("processing mono polygon: {:?}", monotone_poly);
+        info!("processing mono polygon: {:?}", monotone_poly);
         triangulate_monotone(&mut partition_poly, &monotone_poly, vertices);
     }
     partition_poly.partition(vertices)
