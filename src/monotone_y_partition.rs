@@ -1,6 +1,6 @@
 use core::panic;
 use egui::Pos2;
-use log::{debug, info};
+use log::{debug, info, warn};
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::f32::consts::PI;
@@ -84,7 +84,7 @@ impl PartitionVertex {
     }
 
     fn insert_diagonal(&mut self, vertex_idx: usize) {
-        if let Some(_) = self.diag_points.iter().find(|&&x| x==vertex_idx) {
+        if let Some(_) = self.diag_points.iter().find(|&&x| x == vertex_idx) {
             return;
         }
         self.diag_points.push(vertex_idx);
@@ -325,10 +325,12 @@ impl PartitionTree {
     }
 
     pub fn insert(&mut self, edge_origin_idx: usize, helper_idx: usize, poly: &PartitionPolygon) {
+        debug!("tree before insert:{:?}", self.keys);
         let key = poly.vertices[edge_origin_idx].magnified_pos_x();
         self.search_tree
             .insert(key, PartitionTreeEntry::new(edge_origin_idx, helper_idx));
         self.update_keys();
+        debug!("tree after insert:{:?}", self.keys);
     }
 
     /// Find the edge in the tree whose origin is edge_origin
@@ -344,29 +346,59 @@ impl PartitionTree {
 
     /// Erase an edge from tree
     pub fn erase(&mut self, entry_key: i32) -> Result<(), i32> {
+        debug!("tree before erase:{:?}", self.keys);
         if self.search_tree.remove(&entry_key).is_none() {
             return Err(entry_key);
         }
         self.update_keys();
+        debug!("tree after erase:{:?}", self.keys);
         Ok(())
     }
 
     /// Find the a vertex's nearest neighbor in tree
-    pub fn lower_bound(&self, vertex: &PartitionVertex) -> i32 {
-        // HACK: return 0 when search tree is empty
+    /// BUG: use edge's origin's x pos is not perfect for find the nearst left edge
+    /// https://github.com/ShampooDeng/triangulate-rs-egui/issues/12
+    pub fn lower_bound(&self, vertex: &PartitionVertex, poly: &PartitionPolygon) -> i32 {
+        // ???: return 0 when search tree is empty
         // Will this cause any bug?
         if self.search_tree.is_empty() {
             return 0;
         }
-        let pred = vertex.magnified_pos_x();
-        let low = self.keys.partition_point(|x| x < &pred) - 1;
+        // let pred = vertex.magnified_pos_x();
+        let low = self
+            .keys
+            .partition_point(|x| indirect_edge_compare(self.search_tree.get(x).unwrap(), vertex, poly))
+            - 1;
         self.keys[low]
     }
 }
 
+fn indirect_edge_compare(
+    a: &PartitionTreeEntry,
+    b: &PartitionVertex,
+    poly: &PartitionPolygon,
+) -> bool {
+    let edge_origin_x = poly.vertices[a.edge_origin].point.x;
+    let edge_end_x = poly.vertices[poly.next(a.edge_origin)].point.x;
+    let most_left_vertex_x = if edge_origin_x.le(&edge_end_x) {
+        edge_origin_x
+    } else {
+        edge_end_x
+    };
+    if most_left_vertex_x.le(&b.point.x) {
+        true
+    } else {
+        false
+    }
+}
+
 /// Get event vertex's left neighbor in the search tree
-fn get_left_neighbor(vertex: &PartitionVertex, tree: &PartitionTree) -> (i32, usize) {
-    let key = tree.lower_bound(vertex);
+fn get_left_neighbor(
+    vertex: &PartitionVertex,
+    tree: &PartitionTree,
+    poly: &PartitionPolygon,
+) -> (i32, usize) {
+    let key = tree.lower_bound(vertex, poly);
     (key, tree.search_tree[&key].helper)
 }
 
@@ -495,11 +527,10 @@ fn handle_regular_vertex(vertex_idx: usize, tree: &mut PartitionTree, poly: &mut
         tree.insert(vertex_idx, vertex_idx, poly);
     } else {
         debug!("interior is left to vertex{}", vertex_idx);
-        debug!("tree search key before search: {:?}", tree.search_tree.keys());
         // BUG: If a regular vertex is colinear to a neighbor end vertex,
         // then "no entry found for key" or "attempt to subtract with overflow in line 364"
         let (left_neighbor_edge_key, left_neigbor_edge_helper) =
-            get_left_neighbor(&poly.vertices[vertex_idx], tree);
+            get_left_neighbor(&poly.vertices[vertex_idx], tree, &poly);
         if let VertexType::MergeVertex = monoton_vertex_type(poly, left_neigbor_edge_helper) {
             poly.insert_diagonal(vertex_idx, left_neigbor_edge_helper);
         }
@@ -509,7 +540,7 @@ fn handle_regular_vertex(vertex_idx: usize, tree: &mut PartitionTree, poly: &mut
 
 fn handle_split_vertex(vertex_idx: usize, tree: &mut PartitionTree, poly: &mut PartitionPolygon) {
     let (left_neighbor_edge_key, left_neigbor_edge_helper) =
-        get_left_neighbor(&poly.vertices[vertex_idx], tree);
+        get_left_neighbor(&poly.vertices[vertex_idx], tree, &poly);
     poly.insert_diagonal(vertex_idx, left_neigbor_edge_helper);
     update_helper(left_neighbor_edge_key, vertex_idx, tree);
     tree.insert(vertex_idx, vertex_idx, poly);
@@ -524,7 +555,7 @@ fn handle_merge_vertex(vertex_idx: usize, tree: &mut PartitionTree, poly: &mut P
     }
     let _ = tree.erase(search_key);
     let (left_neighbor_edge_key, left_neigbor_edge_helper) =
-        get_left_neighbor(&poly.vertices[vertex_idx], tree);
+        get_left_neighbor(&poly.vertices[vertex_idx], tree, &poly);
     if let VertexType::MergeVertex = monoton_vertex_type(poly, left_neigbor_edge_helper) {
         poly.insert_diagonal(vertex_idx, left_neigbor_edge_helper);
     }
@@ -579,29 +610,30 @@ pub fn monoton_polygon_partition(vertices: &Vec<Pos2>) -> Vec<Vec<Pos2>> {
     partition_poly.partition(vertices)
 }
 
-/// Check if the Monotone polygon's interior is right to a vertex
-fn mono_interior_to_right(
-    idx: usize,
-    top_vertex_idx: usize,
-    vertices: &Vec<Pos2>,
-) -> Result<bool, ()> {
-    // let prev: usize = mono_poly.prev(idx);
-    // let next: usize = mono_poly.next(idx);
-    // let p = &vertices[prev];
-    // let q = &vertices[idx];
-    // let r = &vertices[next];
-    // match cmp_vertex_height(p, q, r) {
-    //     MiddleVertexStatus::GradientDown => Ok(true),
-    //     MiddleVertexStatus::GradientUp => Ok(false),
-    //     _ => Err(()),
-    // }
-    let mono_top_x = vertices[top_vertex_idx].x;
-    let target_x = vertices[idx].x;
-    let result = target_x.partial_cmp(&mono_top_x).unwrap();
-    match result {
-        Ordering::Less => Ok(true),
-        Ordering::Greater => Ok(false),
-        Ordering::Equal => Err(()),
+fn which_side(idx: usize, top_vertex_idx: usize, bottom_vertex_idx: usize) -> WhichSide {
+    if idx == top_vertex_idx || idx == bottom_vertex_idx {
+        return WhichSide::Right;
+    }
+
+    let between_top_and_bottom_is_left: bool;
+    if top_vertex_idx.lt(&bottom_vertex_idx) {
+        between_top_and_bottom_is_left = true;
+    } else {
+        between_top_and_bottom_is_left = false;
+    }
+
+    let between_top_and_bottom: bool;
+    if (idx.lt(&top_vertex_idx) && idx.lt(&bottom_vertex_idx))
+        || (idx.gt(&top_vertex_idx) && idx.gt(&bottom_vertex_idx))
+    {
+        between_top_and_bottom = false;
+    } else {
+        between_top_and_bottom = true;
+    }
+
+    match (between_top_and_bottom, between_top_and_bottom_is_left) {
+        (true, true) | (false, false) => WhichSide::Left,
+        (true, false) | (false, true) => WhichSide::Right,
     }
 }
 
@@ -609,17 +641,13 @@ fn on_same_side(
     idx1: usize,
     idx2: usize,
     top_vertex_idx: usize,
-    vertices: &Vec<Pos2>,
+    bottom_vertex_idx: usize,
 ) -> Option<WhichSide> {
-    let result1 = mono_interior_to_right(idx1, top_vertex_idx, vertices).unwrap_or_else(|_err| {
-        panic!("processing vertex {idx1}");
-    });
-    let result2 = mono_interior_to_right(idx2, top_vertex_idx, vertices).unwrap_or_else(|_err| {
-        panic!("processing vertex {idx2}");
-    });
+    let result1 = which_side(idx1, top_vertex_idx, bottom_vertex_idx);
+    let result2 = which_side(idx2, top_vertex_idx, bottom_vertex_idx);
     match (result1, result2) {
-        (true, true) => Some(WhichSide::Left),
-        (false, false) => Some(WhichSide::Right),
+        (WhichSide::Left, WhichSide::Left) => Some(WhichSide::Left),
+        (WhichSide::Right, WhichSide::Right) => Some(WhichSide::Right),
         _ => None,
     }
 }
@@ -676,6 +704,7 @@ fn triangulate_monotone(
 
     let mut process_stack: Vec<usize> = Vec::new();
     let top_vertex = event_stack.pop().unwrap();
+    let bottom_vertex = event_stack.first().unwrap().clone();
     process_stack.push(top_vertex); // push event_vertex1
     let mut prev_event_vertex = event_stack.pop().unwrap(); // save event_vertex2
     process_stack.push(prev_event_vertex); // push event_vertex2
@@ -689,7 +718,7 @@ fn triangulate_monotone(
             event_vertex,
             *process_stack.last().unwrap(),
             top_vertex,
-            vertices,
+            bottom_vertex,
         ) {
             debug!(
                 "vertex {},{} on same side",
@@ -852,7 +881,7 @@ mod tests {
         }
         assert_eq!(tree.keys, vec![100, 150, 350, 500]);
         // binary search for vertex(2., 1.)'s nearset left neighbor
-        assert_eq!(tree.lower_bound(&poly.vertices[1]), 150);
+        assert_eq!(tree.lower_bound(&poly.vertices[1],&poly), 350);
     }
 
     #[test]

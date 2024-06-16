@@ -13,7 +13,7 @@ use crate::TransformPos;
 
 type Points = Vec<Pos2>;
 
-fn example_poly() -> Points{
+fn example_poly() -> Points {
     vec![
         Pos2::new(157., 29.), // 0
         Pos2::new(308., 173.), // 1
@@ -25,6 +25,22 @@ fn example_poly() -> Points{
     ]
 }
 
+fn example_poly2() -> Points {
+    vec![
+        Pos2::new(218.,60.),  //0
+        Pos2::new(251.,197.), //1
+        Pos2::new(362.,97.),  //2
+        Pos2::new(460.,127.), //3
+        Pos2::new(527.,250.), //4
+        Pos2::new(628.,111.), //5
+        Pos2::new(688.,38.),  //6
+        Pos2::new(739.,257.), //7
+        Pos2::new(646.,395.), //8
+        Pos2::new(530.,406.), //9
+        Pos2::new(380.,365.), //10
+        Pos2::new(257.,413.), //11
+    ]
+}
 pub struct Painting {
     /// in 0-1 normalized coordinates
     points: Points,
@@ -44,7 +60,7 @@ impl Default for Painting {
     fn default() -> Self {
         Self {
             // points: Default::default(),
-            points: example_poly(),
+            points: example_poly2(),
             polygon_partition: Vec::new(),
             stroke: Stroke::new(1.0, Color32::from_rgb(25, 200, 100)),
             radius: 5.,
@@ -205,9 +221,12 @@ impl Painting {
                 }
             } else if let Some(last_point) = self.points.last() {
                 // Reject the current cursor position is too close the last point position.
-                if (last_point.x - current_point.x).powi(2)
+                // HACK: Reject neighbor point that has same y coordinates,
+                // This is a temperary solution to https://github.com/ShampooDeng/triangulate-rs-egui/issues/13
+                if ((last_point.x - current_point.x).powi(2)
                     + (last_point.y - current_point.y).powi(2)
-                    > 1000.
+                    > 1000.)
+                    && last_point.y.ne(&current_point.y)
                 {
                     self.points.push(current_point);
                     response.mark_changed();
@@ -230,7 +249,7 @@ impl Painting {
         }
 
         // Drawing ui content
-        self.draw_polygon(&self.points,&painter);
+        self.draw_polygon(&self.points, &painter);
         self.draw_polygon_partition(&painter);
         self.draw_vertices(&painter);
         self.mark_selected_point(&painter);
