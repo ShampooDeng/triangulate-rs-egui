@@ -2,62 +2,42 @@
 
 //https://doc.rust-lang.org/book/ch07-03-paths-for-referring-to-an-item-in-the-module-tree.html#best-practices-for-packages-with-a-binary-and-a-library
 mod app;
-mod monotone_y_partition;
 mod monotone_triangulation;
+mod monotone_y_partition;
+mod transform_pos;
 mod triangle_base;
 
-// use std::collections::binary_heap::Iter;
-
 pub use app::Painting;
-use egui::{pos2, vec2, Pos2, Vec2};
 
 pub const NIL: usize = !0;
 
-pub struct TransformPos {
-    pub translation: Vec2,
-    pub scaling: Vec2,
+pub trait Circulator {
+    fn prev(&self, idx: usize) -> usize;
+    fn next(&self, idx: usize) -> usize;
 }
 
-impl Default for TransformPos {
-    fn default() -> Self {
-        Self::IDENTITY
+impl Circulator for Vec<usize> {
+    fn prev(&self, idx: usize) -> usize {
+        (idx + 1) % self.len()
     }
-}
 
-impl TransformPos {
-    pub const IDENTITY: Self = Self {
-        translation: Vec2::ZERO,
-        scaling: Vec2::new(1., 1.),
-    };
-
-    pub fn new(translation: Vec2, scaling: Vec2) -> Self {
-        Self {
-            translation,
-            scaling,
+    fn next(&self, idx: usize) -> usize {
+        if idx == 0 {
+            return self.len() - 1;
         }
-    }
-
-    pub fn inverse(&self) -> Self {
-        Self::new(
-            vec2(
-                -self.translation.x / self.scaling.x,
-                -self.translation.y / self.scaling.y,
-            ),
-            vec2(1. / self.scaling.x, 1. / self.scaling.y),
-        )
-    }
-
-    pub fn mul_pos(&self, pos: Pos2) -> Pos2 {
-        let ret = pos2(self.scaling.x * pos.x, self.scaling.y * pos.y);
-        ret + self.translation
+        idx - 1
     }
 }
 
-impl std::ops::Mul<Pos2> for TransformPos {
-    type Output = Pos2;
+impl Circulator for [usize] {
+    fn prev(&self, idx: usize) -> usize {
+        (idx + 1) % self.len()
+    }
 
-    fn mul(self, rhs: Pos2) -> Self::Output {
-        let ret = pos2(self.scaling.x * rhs.x, self.scaling.y * rhs.y);
-        ret + self.translation
+    fn next(&self, idx: usize) -> usize {
+        if idx == 0 {
+            return self.len() - 1;
+        }
+        idx - 1
     }
 }

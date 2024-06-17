@@ -2,9 +2,9 @@ use eframe::egui::*;
 use kd_tree::KdTree2;
 use log::debug;
 
-use crate::monotone_y_partition::monoton_polygon_partition;
-use crate::monotone_y_partition::polygon_triangulation;
-use crate::TransformPos;
+// use crate::monotone_y_partition::monoton_polygon_partition;
+use crate::monotone_triangulation::polygon_triangulation;
+use crate::transform_pos::TransformPos;
 
 // TODO: more detailed comments
 
@@ -15,9 +15,9 @@ type Points = Vec<Pos2>;
 
 fn example_poly() -> Points {
     vec![
-        Pos2::new(157., 29.), // 0
+        Pos2::new(157., 29.),  // 0
         Pos2::new(308., 173.), // 1
-        Pos2::new(481., 49.), // 2
+        Pos2::new(481., 49.),  // 2
         Pos2::new(624., 180.), // 3
         Pos2::new(500., 349.), // 4
         Pos2::new(378., 286.), // 5
@@ -27,18 +27,18 @@ fn example_poly() -> Points {
 
 fn example_poly2() -> Points {
     vec![
-        Pos2::new(218.,60.),  //0
-        Pos2::new(251.,197.), //1
-        Pos2::new(362.,97.),  //2
-        Pos2::new(460.,127.), //3
-        Pos2::new(527.,250.), //4
-        Pos2::new(628.,111.), //5
-        Pos2::new(688.,38.),  //6
-        Pos2::new(739.,257.), //7
-        Pos2::new(646.,395.), //8
-        Pos2::new(530.,406.), //9
-        Pos2::new(380.,365.), //10
-        Pos2::new(257.,413.), //11
+        Pos2::new(218., 60.),  //0
+        Pos2::new(251., 197.), //1
+        Pos2::new(362., 97.),  //2
+        Pos2::new(460., 127.), //3
+        Pos2::new(527., 250.), //4
+        Pos2::new(628., 111.), //5
+        Pos2::new(688., 38.),  //6
+        Pos2::new(739., 257.), //7
+        Pos2::new(646., 395.), //8
+        Pos2::new(530., 406.), //9
+        Pos2::new(380., 365.), //10
+        Pos2::new(257., 413.), //11
     ]
 }
 pub struct Painting {
