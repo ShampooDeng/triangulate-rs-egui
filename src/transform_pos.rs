@@ -1,6 +1,7 @@
-// pub use crate::app::Painting;
 use egui::{pos2, vec2, Pos2, Vec2};
 
+/// TransformPos stores the translation and scaling for 
+/// transposing coordinates.
 pub struct TransformPos {
     pub translation: Vec2,
     pub scaling: Vec2,
@@ -41,6 +42,7 @@ impl TransformPos {
     // }
 }
 
+/// Define * operator for TransformPos
 impl std::ops::Mul<Pos2> for TransformPos {
     type Output = Pos2;
 

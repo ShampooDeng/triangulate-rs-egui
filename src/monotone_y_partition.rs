@@ -24,7 +24,9 @@ pub enum VertexType {
 type Vertices = Vec<Pos2>;
 
 struct PartitionVertex {
+    // coordinates of point
     point: Pos2,
+    // indexes of points on the other side of the diagonals
     diag_points: Vec<usize>,
     unused_diag_count: usize,
 }
@@ -33,7 +35,6 @@ impl PartitionVertex {
     fn new(input: &Pos2) -> Self {
         PartitionVertex {
             point: *input, // Pos2 has copy trait, so just dereference it.
-            // NOTE: Vec<T> can't be deep copied
             diag_points: Vec::new(),
             unused_diag_count: 0,
         }
@@ -114,6 +115,8 @@ fn compute_angle(cur: &Pos2, next: &Pos2, target: &Pos2) -> f32 {
     }
 }
 
+/// A simple polygon defined by a collection
+/// of vertices in **ccw** order.
 pub struct PartitionPolygon {
     vertices: Vec<PartitionVertex>,
 }
@@ -169,7 +172,6 @@ impl PartitionPolygon {
 
     /// Use this method with rest_unused_diag_count()
     pub fn make_polygons(&mut self, start: usize, result: &mut Vec<Vec<usize>>) -> usize {
-        // TODO: description for this function
         let mut new_polygon: Vec<usize> = Vec::new();
         let mut idx: usize = start;
         debug!(
@@ -218,7 +220,6 @@ impl PartitionPolygon {
             if !self.vertices[idx].diag_points.is_empty() {
                 let next_pos = self.vertices[(idx + 1) % self.vertices.len()].point;
                 self.vertices[idx].sort_diag(&next_pos, vertices);
-                // cur.sort_diag(&next_pos, vertices);
             }
             debug!("vertex{}'s diag: {:?}", idx, self.vertices[idx].diag_points);
         }
@@ -272,7 +273,7 @@ impl PartitionTree {
     fn new() -> Self {
         PartitionTree {
             search_tree: BTreeMap::new(),
-            keys: Vec::new(),
+            keys: Vec::new(), // keys of binary tree map
         }
     }
 
@@ -280,6 +281,7 @@ impl PartitionTree {
         self.keys = self.search_tree.clone().into_keys().collect::<Vec<i32>>();
     }
 
+    /// Add a new edge and its helper by inserting its origin idx and its helper's idx.
     pub fn insert(&mut self, edge_origin_idx: usize, helper_idx: usize, poly: &PartitionPolygon) {
         debug!("tree before insert:{:?}", self.keys);
         let key = poly.vertices[edge_origin_idx].magnified_pos_x();
@@ -312,11 +314,8 @@ impl PartitionTree {
     }
 
     /// Find the a vertex's nearest neighbor in tree
-    /// BUG: use edge's origin's x pos is not perfect for find the nearst left edge
-    /// https://github.com/ShampooDeng/triangulate-rs-egui/issues/12
     pub fn lower_bound(&self, vertex: &PartitionVertex, poly: &PartitionPolygon) -> i32 {
-        // ???: return 0 when search tree is empty
-        // Will this cause any bug?
+        // return 0 when search tree is empty
         if self.search_tree.is_empty() {
             return 0;
         }
@@ -489,6 +488,7 @@ fn handle_merge_vertex(vertex_idx: usize, tree: &mut PartitionTree, poly: &mut P
     update_helper(left_neighbor_edge_key, vertex_idx, tree);
 }
 
+/// Monotone partition a polygon by inserting diagonals in PartitionPolygon
 pub fn monotone_partition(mut partition_poly: &mut PartitionPolygon) {
     let mut tree = PartitionTree::new();
     let mut event_queue = to_event_queue(&partition_poly.vertices);
@@ -519,7 +519,8 @@ pub fn monotone_partition(mut partition_poly: &mut PartitionPolygon) {
     }
 }
 
-pub fn monoton_polygon_partition(vertices: &Vec<Pos2>) -> Vec<Vec<Pos2>> {
+/// Monotone partition a polygon and output partitions' vertices coordinates.
+pub fn monotone_polygon_partition(vertices: &Vec<Pos2>) -> Vec<Vec<Pos2>> {
     let mut partition_poly = PartitionPolygon::new();
     // let vertices_rc = vertices.iter().map(|x| Rc::new(x.clone()));
     partition_poly.build_from_pts(vertices);
@@ -542,7 +543,7 @@ mod tests {
     use std::vec;
 
     use super::{
-        monoton_polygon_partition, to_event_queue, PartitionPolygon, PartitionTree,
+        monotone_polygon_partition, to_event_queue, PartitionPolygon, PartitionTree,
         PartitionVertex, VertexType,
     };
     use crate::monotone_y_partition::monoton_vertex_type;
@@ -671,7 +672,7 @@ mod tests {
         pts.push(Pos2::new(500., 349.)); // 4
         pts.push(Pos2::new(378., 286.)); // 5
         pts.push(Pos2::new(185., 333.)); // 6
-        let result = monoton_polygon_partition(&pts);
+        let result = monotone_polygon_partition(&pts);
         // assert_eq!(result[0], Vec::new());
         // assert_eq!(result[1], Vec::new());
         // assert_eq!(result[2], Vec::new());

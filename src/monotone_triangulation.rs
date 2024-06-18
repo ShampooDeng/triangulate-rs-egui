@@ -3,18 +3,42 @@ use crate::triangle_base::*;
 use egui::Pos2;
 use log::{debug, info};
 use std::cmp::Ordering;
+use std::fmt::Debug;
 
+pub enum WhichSide {
+    Left,
+    Right,
+}
+
+impl Debug for WhichSide {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let WhichSide::Left = self {
+            write!(f, "left")
+        } else {
+            write!(f, "right")
+        }
+    }
+}
+
+/// Check which side of the monotone polygon does a vertex belong to.
 fn which_side(idx: usize, top_vertex_idx: usize, bottom_vertex_idx: usize) -> WhichSide {
+    /* For monotone polygon defined in ccw order, the top and bottom vertex is
+    vertex index: 0, 1, 2, ..., 8, 9.
+                     ^          ^
+    either           top        bottom
+    or               bottom     top
+    */
     if idx == top_vertex_idx || idx == bottom_vertex_idx {
         return WhichSide::Right;
     }
 
+    // If the index of top is less than bottom,
+    // then the interval of top and bottom is on the left side of the polygon.
     let between_top_and_bottom_is_left = if top_vertex_idx.lt(&bottom_vertex_idx) {
         true
     } else {
         false
     };
-
     let between_top_and_bottom = if (idx.lt(&top_vertex_idx) && idx.lt(&bottom_vertex_idx))
         || (idx.gt(&top_vertex_idx) && idx.gt(&bottom_vertex_idx))
     {
@@ -29,6 +53,7 @@ fn which_side(idx: usize, top_vertex_idx: usize, bottom_vertex_idx: usize) -> Wh
     }
 }
 
+/// Check if two vertex is on the same of a monotone polygon
 fn on_same_side(
     idx1: usize,
     idx2: usize,
@@ -44,7 +69,9 @@ fn on_same_side(
     }
 }
 
-// BUG: check this function
+/// Check if a diagonal inside a monotone polygon
+/// by assessing the orientation of event, last,
+/// lastlast vertex (in process stack)'s orientation.
 fn inside_mono_poly(
     cur: usize,
     last: usize,
@@ -52,8 +79,7 @@ fn inside_mono_poly(
     side: &WhichSide,
     vertices: &Vec<Pos2>,
 ) -> bool {
-    let orientation: Orientation;
-    orientation = cmp_slope(&vertices[cur], &vertices[last], &vertices[lastlast]);
+    let orientation = cmp_slope(&vertices[cur], &vertices[last], &vertices[lastlast]);
     match (side, orientation) {
         (WhichSide::Left, Orientation::ClockWise) => true,
         (WhichSide::Right, Orientation::CounterClockWise) => true,
@@ -61,15 +87,19 @@ fn inside_mono_poly(
     }
 }
 
+/// Triangulate monotone polygon by
+/// add new diagonals in PartitionPolygon
 fn triangulate_monotone(
     partition_poly: &mut PartitionPolygon,
     monotone_poly: &[usize],
     vertices: &Vec<Pos2>,
 ) {
+    // Partition is already a triangle
     if monotone_poly.len() <= 3 {
         return;
     }
 
+    // Sort monotone partition's vertices by their coordinates.
     let mut event_stack: Vec<usize> = Vec::new();
     monotone_poly.clone_into(&mut event_stack);
     event_stack.sort_by(|a, b| {
@@ -89,11 +119,11 @@ fn triangulate_monotone(
     debug!("event_stack after sort: {:?}", event_stack);
 
     let mut process_stack: Vec<usize> = Vec::new();
-    let top_vertex = event_stack.pop().unwrap();
-    let bottom_vertex = event_stack.first().unwrap().clone();
-    process_stack.push(top_vertex); // push event_vertex1
-    let mut prev_event_vertex = event_stack.pop().unwrap(); // save event_vertex2
-    process_stack.push(prev_event_vertex); // push event_vertex2
+    let top_vertex = event_stack.pop().unwrap(); // top vertex of monotone polygon
+    let bottom_vertex = event_stack.first().unwrap().clone(); // bottom vertex of monotone polygon
+    let mut prev_event_vertex = event_stack.pop().unwrap();
+    process_stack.push(top_vertex); // push last vertex in event stack
+    process_stack.push(prev_event_vertex); // push lastlast vertex in event stack
 
     while let Some(event_vertex) = event_stack.pop() {
         debug!("processing event vertex{}", event_vertex);
@@ -112,9 +142,11 @@ fn triangulate_monotone(
                 process_stack.last().unwrap(),
                 side
             );
+            // Pop last in process stack, and add diagonal to all vertice
+            // in process stack if possible. Stop until diagonal intersect
+            // with polygon outlines, and push lastlast into process stack.
             let mut last = process_stack.pop().unwrap();
             while let Some(lastlast) = process_stack.pop() {
-                // let lastlast = *process_stack.last().unwrap();
                 if inside_mono_poly(event_vertex, last, lastlast, &side, vertices) {
                     partition_poly.insert_diagonal(lastlast, event_vertex);
                     last = lastlast;
@@ -126,6 +158,8 @@ fn triangulate_monotone(
             process_stack.push(last);
             process_stack.push(event_vertex);
         } else {
+            // Pop all vertices in process stack, and insert diagonals between
+            // current event vertex and them.
             while let Some(vertex_idx) = process_stack.pop() {
                 partition_poly.insert_diagonal(vertex_idx, event_vertex);
             }
@@ -139,6 +173,8 @@ fn triangulate_monotone(
         prev_event_vertex = event_vertex;
     }
 
+    // Insert diagonals between the bottom event vertex and 
+    // all vertices left in process stack.
     let event_stack_bottom = event_stack.pop().unwrap();
     if process_stack.len() > 2 {
         for idx in process_stack[1..process_stack.len() - 1].iter() {
@@ -147,6 +183,7 @@ fn triangulate_monotone(
     }
 }
 
+/// Triangulate all monotone polygon partititons
 pub fn polygon_triangulation(vertices: &Vec<Pos2>) -> Vec<Vec<Pos2>> {
     let mut partition_poly = PartitionPolygon::new();
     partition_poly.build_from_pts(vertices);
@@ -157,10 +194,13 @@ pub fn polygon_triangulation(vertices: &Vec<Pos2>) -> Vec<Vec<Pos2>> {
     let mut monotone_polygons: Vec<Vec<usize>> = Vec::new();
     partition_poly.make_polygons(0, &mut monotone_polygons);
     partition_poly.reset_unused_diag_counts();
+
     info!("---start triangulate monotone polygon---");
     while let Some(monotone_poly) = monotone_polygons.pop() {
         info!("processing mono polygon: {:?}", monotone_poly);
         triangulate_monotone(&mut partition_poly, &monotone_poly, vertices);
     }
+
+    // Generate monotone polygon partition and output coordinates
     partition_poly.partition(vertices)
 }
