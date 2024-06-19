@@ -1,15 +1,15 @@
 use crate::triangle_base::*;
 use crate::Circulator;
 use core::panic;
-use egui::Pos2;
+use egui::{Pos2, Color32};
 use log::{debug, info};
+use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
+use std::rc::Rc;
 
 use MiddleVertexStatus::{Concave, Convex};
 use Orientation::{ClockWise, CounterClockWise};
-
-use std::f32::consts::PI;
 
 pub enum VertexType {
     StartVertex,
@@ -23,12 +23,14 @@ pub enum VertexType {
 // used as auxilary reference in sort_daig() and partition()
 type Vertices = Vec<Pos2>;
 
-struct PartitionVertex {
+pub struct PartitionVertex {
     // coordinates of point
-    point: Pos2,
+    pub point: Pos2,
     // indexes of points on the other side of the diagonals
-    diag_points: Vec<usize>,
-    unused_diag_count: usize,
+    pub diag_points: Vec<usize>,
+    pub half_diags: Vec<Rc<RefCell<HalfDiag>>>,
+    pub unused_diag_count: usize,
+    pub color: egui::Color32,
 }
 
 impl PartitionVertex {
@@ -36,15 +38,18 @@ impl PartitionVertex {
         PartitionVertex {
             point: *input, // Pos2 has copy trait, so just dereference it.
             diag_points: Vec::new(),
+            half_diags: Vec::new(),
             unused_diag_count: 0,
+            color: Color32::BLACK,
         }
     }
 
-    fn insert_diagonal(&mut self, vertex_idx: usize) {
+    fn insert_diagonal(&mut self, vertex_idx: usize, half_diag: Rc<RefCell<HalfDiag>>) {
         if let Some(_) = self.diag_points.iter().find(|&&x| x == vertex_idx) {
             return;
         }
         self.diag_points.push(vertex_idx);
+        self.half_diags.push(half_diag.clone());
         self.unused_diag_count += 1;
     }
 
@@ -89,36 +94,79 @@ impl PartitionVertex {
     }
 }
 
-fn vector_length(vector: (f32, f32)) -> f32 {
-    (vector.0.powi(2) + vector.1.powi(2)).sqrt()
+pub struct HalfDiag {
+    pub origin: usize,
+    pub end: usize,
+    pub twin: Option<Rc<RefCell<HalfDiag>>>,
+    pub bounding_face: Option<Rc<RefCell<Face>>>,
 }
 
-/// Compute the angle between vector1(cur -> next)
-/// and vector2 (cur -> target).\
-/// The angle is in 0 to 2pi, from vector1 to vector2.\
-/// cur: current vertex\
-/// next: cur's next vertex in partition polygon
-fn compute_angle(cur: &Pos2, next: &Pos2, target: &Pos2) -> f32 {
-    let ref_vector = (next.x - cur.x, next.y - cur.y);
-    let target_vector = (target.x - cur.x, target.y - cur.y);
-    let cos = (ref_vector.0 * target_vector.0 + ref_vector.1 * target_vector.1)
-        / (vector_length(ref_vector) * vector_length(target_vector));
-    let sin = (ref_vector.0 * target_vector.1 - ref_vector.1 * target_vector.0)
-        / (vector_length(ref_vector) * vector_length(target_vector));
-    if let Some(res) = sin.partial_cmp(&0.0) {
-        match res {
-            Ordering::Less => 2. * PI - cos.acos(),
-            _ => cos.acos(),
+impl HalfDiag {
+    fn new(origin: usize, end: usize) -> Rc<RefCell<Self>> {
+        Rc::new(RefCell::new(HalfDiag {
+            origin,
+            end,
+            twin: None,
+            bounding_face: None,
+        }))
+    }
+
+    fn spwan_twin(origin: usize, end: usize) -> (Rc<RefCell<Self>>, Rc<RefCell<Self>>) {
+        let half_diag1 = HalfDiag::new(origin, end);
+        let half_diag2 = HalfDiag::new(end, origin);
+        half_diag1.borrow_mut().twin = Some(half_diag2.clone());
+        half_diag2.borrow_mut().twin = Some(half_diag1.clone());
+        (half_diag1, half_diag2)
+    }
+}
+
+pub struct Face {
+    pub vertices: Vec<usize>,
+    pub centroid: Pos2,
+    pub bounding_diags: Vec<Rc<RefCell<HalfDiag>>>,
+}
+
+impl Face {
+    // pub fn new(vertices: Vec<usize>, coordinates: &Vertices) -> Self {
+    //     let mut new_face = Face {
+    //         vertices,
+    //         centroid: Pos2::ZERO,
+    //         bounding_diags: Vec::new(),
+    //     };
+    //     new_face.calc_centroid(coordinates);
+    // }
+    pub fn new(vertices: Vec<usize>, coordinates: &Vertices) -> Rc<RefCell<Face>> {
+        let new_face = Rc::new(RefCell::new(Face {
+            vertices,
+            centroid: Pos2::ZERO,
+            bounding_diags: Vec::new(),
+        }));
+        let _ = new_face.borrow_mut().calc_centroid(coordinates);
+        new_face
+    }
+
+    fn calc_centroid(&mut self, coordinates: &Vertices) -> Result<(), ()> {
+        if self.vertices.len() == 0 {
+            return Err(());
         }
-    } else {
-        panic!("Bro, what can i say")
+        let mut x: f32 = 0.0;
+        let mut y: f32 = 0.0;
+        for vertex_idx in self.vertices.iter() {
+            x += coordinates[*vertex_idx].x;
+            y += coordinates[*vertex_idx].y;
+        }
+        let len = self.vertices.len() as f32;
+        self.centroid = Pos2::new(x / len, y / len);
+        Ok(())
     }
 }
 
 /// A simple polygon defined by a collection
 /// of vertices in **ccw** order.
 pub struct PartitionPolygon {
-    vertices: Vec<PartitionVertex>,
+    pub vertices: Vec<PartitionVertex>,
+    pub faces: Vec<Rc<RefCell<Face>>>,
+    // pub faces: Vec<Face>,
 }
 
 impl Circulator for PartitionPolygon {
@@ -140,6 +188,7 @@ impl PartitionPolygon {
     pub fn new() -> Self {
         PartitionPolygon {
             vertices: Vec::new(),
+            faces: Vec::new(),
         }
     }
 
@@ -149,9 +198,10 @@ impl PartitionPolygon {
         if self.next(idx1) == idx2 || self.prev(idx1) == idx2 {
             return;
         }
+        let (halfdiag1, halfdiag2) = HalfDiag::spwan_twin(idx1, idx2);
         info!("insert diagonal between {} and {}", idx1, idx2);
-        self.vertices[idx1].insert_diagonal(idx2);
-        self.vertices[idx2].insert_diagonal(idx1);
+        self.vertices[idx1].insert_diagonal(idx2, halfdiag1);
+        self.vertices[idx2].insert_diagonal(idx1, halfdiag2);
     }
 
     /// Build a partition polygon from a list of vertices
@@ -171,7 +221,12 @@ impl PartitionPolygon {
     }
 
     /// Use this method with rest_unused_diag_count()
-    pub fn make_polygons(&mut self, start: usize, result: &mut Vec<Vec<usize>>) -> usize {
+    pub fn make_polygons(
+        &mut self,
+        start: usize,
+        result: &mut Vec<Vec<usize>>,
+        vertices: &Vec<Pos2>,
+    ) -> usize {
         let mut new_polygon: Vec<usize> = Vec::new();
         let mut idx: usize = start;
         debug!(
@@ -184,10 +239,10 @@ impl PartitionPolygon {
                 let diag = self.vertices[idx].pop_current_diag();
                 if diag == start {
                     debug!("push into result:{:?}", new_polygon);
-                    result.push(new_polygon);
+                    result.push(new_polygon.clone());
                     return idx;
                 } else {
-                    idx = self.make_polygons(idx, result);
+                    idx = self.make_polygons(idx, result, vertices);
                 }
             } else {
                 idx = (idx + 1) % self.vertices.len();
@@ -195,7 +250,7 @@ impl PartitionPolygon {
 
             if idx == start && new_polygon.len() > 2 {
                 debug!("push into result:{:?}", new_polygon);
-                result.push(new_polygon);
+                result.push(new_polygon.clone());
                 break;
             }
         }
@@ -233,11 +288,37 @@ impl PartitionPolygon {
         self.sort_diagonals(vertices);
         let mut result: Vec<Vec<usize>> = Vec::new();
         info!("---start making polygons---");
-        let ret = self.make_polygons(0, &mut result);
+        let ret = self.make_polygons(0, &mut result, vertices);
         debug!("the return of make_polygons:{}", ret);
         self.reset_unused_diag_counts();
+        self.link_face(&result, vertices);
         debug!("the num of polygon partition:{}", result.len());
         self.output_coordinates(&result)
+    }
+
+    fn link_face(&mut self, result: &Vec<Vec<usize>>, vertices: &Vec<Pos2>) {
+        info!("---start link diag to face---");
+        for partition in result.iter() {
+            debug!("linking face{:?}", partition);
+            let new_face = Face::new(partition.clone(), vertices);
+            for i in 0..partition.len() {
+                let point_idx = partition[i];
+                if self.vertices[point_idx].diag_points.len() == 0 {
+                    debug!("vertex{} has {} diagognals", point_idx, 0);
+                    continue;
+                }
+                let next_point_idx = partition.next(i);
+                debug!("check vertex{} and its next vertex{}", point_idx, next_point_idx);
+                for half_diag in self.vertices[point_idx].half_diags.iter() {
+                    if next_point_idx == half_diag.borrow().end {
+                        debug!("found diag{}-{}", point_idx, next_point_idx);
+                        new_face.borrow_mut().bounding_diags.push(half_diag.clone());
+                        half_diag.borrow_mut().bounding_face = Some(new_face.clone());
+                    }
+                }
+                self.faces.push(new_face.clone());
+            }
+        }
     }
 }
 

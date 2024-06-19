@@ -6,6 +6,7 @@ mod monotone_triangulation;
 mod monotone_y_partition;
 mod transform_pos;
 mod triangle_base;
+mod vertex_coloring;
 
 pub use app::Painting;
 
@@ -17,27 +18,27 @@ pub trait Circulator {
 }
 
 impl Circulator for Vec<usize> {
-    fn prev(&self, idx: usize) -> usize {
-        (idx + 1) % self.len()
+    fn next(&self, idx: usize) -> usize {
+        self[(idx + 1) % self.len()]
     }
 
-    fn next(&self, idx: usize) -> usize {
+    fn prev(&self, idx: usize) -> usize {
         if idx == 0 {
-            return self.len() - 1;
+            return self[self.len() - 1];
         }
-        idx - 1
+        self[idx - 1]
     }
 }
 
-impl Circulator for [usize] {
-    fn prev(&self, idx: usize) -> usize {
-        (idx + 1) % self.len()
-    }
+// impl Circulator for [usize] {
+//     fn next(&self, idx: usize) -> usize {
+//         (idx + 1) % self.len()
+//     }
 
-    fn next(&self, idx: usize) -> usize {
-        if idx == 0 {
-            return self.len() - 1;
-        }
-        idx - 1
-    }
-}
+//     fn prev(&self, idx: usize) -> usize {
+//         if idx == 0 {
+//             return self.len() - 1;
+//         }
+//         idx - 1
+//     }
+// }

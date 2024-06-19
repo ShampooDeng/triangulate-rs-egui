@@ -184,15 +184,15 @@ fn triangulate_monotone(
 }
 
 /// Triangulate all monotone polygon partititons
-pub fn polygon_triangulation(vertices: &Vec<Pos2>) -> Vec<Vec<Pos2>> {
-    let mut partition_poly = PartitionPolygon::new();
+pub fn polygon_triangulation(vertices: &Vec<Pos2>, mut partition_poly: &mut PartitionPolygon) -> Vec<Vec<Pos2>> {
+    // let mut partition_poly = PartitionPolygon::new();
     partition_poly.build_from_pts(vertices);
 
     info!("---start monotone partition---");
     monotone_partition(&mut partition_poly);
     partition_poly.sort_diagonals(vertices);
     let mut monotone_polygons: Vec<Vec<usize>> = Vec::new();
-    partition_poly.make_polygons(0, &mut monotone_polygons);
+    partition_poly.make_polygons(0, &mut monotone_polygons, vertices);
     partition_poly.reset_unused_diag_counts();
 
     info!("---start triangulate monotone polygon---");

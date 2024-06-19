@@ -1,10 +1,15 @@
+use std::collections::HashMap;
+use std::usize;
+
 use eframe::egui::*;
 use kd_tree::KdTree2;
 use log::debug;
 
 // use crate::monotone_y_partition::monoton_polygon_partition;
 use crate::monotone_triangulation::polygon_triangulation;
+use crate::monotone_y_partition::PartitionPolygon;
 use crate::transform_pos::TransformPos;
+use crate::vertex_coloring::dfs;
 
 // TODO: more detailed comments
 
@@ -41,15 +46,21 @@ fn example_poly2() -> Points {
         Pos2::new(257., 413.), //11
     ]
 }
+
+fn generate_point_colors(len: usize) -> Vec<Color32> {
+    vec![Color32::BLACK;len]
+}
 pub struct Painting {
     /// in 0-1 normalized coordinates
     points: Points,
+    point_colors: Vec<egui::Color32>,
     polygon_partition: Vec<Points>,
     stroke: Stroke,
     radius: f32,
     kdtree: KdTree2<[f32; 2]>,
     focused_point: Pos2,
     _painting_rect: Rect,
+    dcel: PartitionPolygon,
 
     // Application mode flag
     triangulating: bool,
@@ -58,9 +69,11 @@ pub struct Painting {
 
 impl Default for Painting {
     fn default() -> Self {
+        let points = example_poly2();
         Self {
             // points: Default::default(),
-            points: example_poly2(),
+            points: points,
+            point_colors: Vec::new(),
             polygon_partition: Vec::new(),
             stroke: Stroke::new(1.0, Color32::from_rgb(25, 200, 100)),
             radius: 5.,
@@ -70,6 +83,7 @@ impl Default for Painting {
                 min: Pos2::ZERO,
                 max: Pos2::ZERO,
             },
+            dcel: PartitionPolygon::new(),
 
             triangulating: false,
             coloring: false,
@@ -124,10 +138,17 @@ impl Painting {
     /// Draw vertices spawned by Mouse click in the drawing area.
     fn draw_vertices(&mut self, p: &Painter) {
         // Draw vertices
+        let mut idx:usize = 0;
         let vertices = self.points.iter().map(|point| {
             // Transpose vertex coordinate to gui's coordiante system.
             let center = self.to_screen() * *point;
-            egui::Shape::circle_filled(center, self.radius, Color32::RED)
+            let ret = if self.point_colors.is_empty() {
+                egui::Shape::circle_filled(center, self.radius, Color32::BLACK)
+            } else {
+                egui::Shape::circle_filled(center, self.radius, self.point_colors[idx])
+            };
+            idx += 1;
+            ret
         });
         p.extend(vertices);
 
@@ -137,7 +158,7 @@ impl Painting {
             let pt = self.to_screen() * self.points[i];
             let pos = pos2(pt.x + self.radius, pt.y + self.radius);
             let text = i.to_string();
-            p.text(pos, Align2::LEFT_TOP, text, font_id, Color32::BLACK);
+            p.text(pos, Align2::LEFT_TOP, text, font_id, Color32::RED);
         }
     }
 
@@ -177,15 +198,21 @@ impl Painting {
                 self.points.clear();
                 self.polygon_partition.clear();
                 self.focused_point = pos2(-1., -1.);
+                self.dcel = PartitionPolygon::new();
+                self.point_colors.clear();
             }
             if ui.button("Triangulate Polygon").clicked() {
                 self.triangulating = true;
                 // self.polygon_partition = monoton_polygon_partition(&self.points);
-                self.polygon_partition = polygon_triangulation(&self.points);
+                self.polygon_partition = polygon_triangulation(&self.points, &mut self.dcel);
                 self.triangulating = false;
             }
             if ui.button("3-coloring triangles").clicked() {
-                self.coloring = !self.coloring;
+                self.coloring = true;
+                self.point_colors = generate_point_colors(self.points.len());
+                let mut check_table:Vec<(usize, usize)> = Vec::new();
+                dfs(self.dcel.faces[0].clone(), &mut check_table, &mut self.point_colors);
+                self.coloring = false;
             }
             if self.triangulating {
                 ui.spinner();
@@ -220,7 +247,7 @@ impl Painting {
                     );
                 }
             } else if let Some(last_point) = self.points.last() {
-                // Reject the current cursor position is too close the last point position.
+                // Reject the current cursor position that is too close the last point position.
                 // HACK: Reject neighbor point that has same y coordinates,
                 // This is a temperary solution to https://github.com/ShampooDeng/triangulate-rs-egui/issues/13
                 if ((last_point.x - current_point.x).powi(2)
