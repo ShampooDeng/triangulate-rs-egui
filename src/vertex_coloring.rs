@@ -3,16 +3,11 @@ use egui::Color32;
 use log::debug;
 use std::{cell::RefCell, rc::Rc};
 
-
-fn coloring_triangle(
-    face: Rc<RefCell<Face>>,
-    colors: &mut Vec<Color32>,
-) {
-    // TODO: coloring some vertices
+fn coloring_triangle(face: Rc<RefCell<Face>>, colors: &mut Vec<Color32>) {
     let mut red_avaiable = true;
     let mut green_avaiable = true;
     let mut blue_avaiable = true;
-    let mut process_stack:Vec<usize> = Vec::new();
+    let mut process_stack: Vec<usize> = Vec::new();
     for i in 0..3 {
         let idx = face.as_ref().borrow().vertices[i];
         let vertex_color = colors[idx];
@@ -42,16 +37,16 @@ fn coloring_triangle(
 }
 
 pub fn dfs(
-    face: Rc<RefCell<Face>>,
-    check_table: &mut Vec<(usize, usize)>,
+    start_face: Rc<RefCell<Face>>,
+    half_diag_check_table: &mut Vec<(usize, usize)>,
     colors: &mut Vec<Color32>,
 ) {
-    let face_clone1 = face.clone();
-    let mut unchecked_diags = face.as_ref().borrow().bounding_diags.len();
+    let face_clone1 = start_face.clone();
+    let mut unchecked_diags = start_face.as_ref().borrow().bounding_diags.len();
 
-    let face_clone2 = face.clone();
+    let face_clone2 = start_face.clone();
     debug!("on parition{:?}", face_clone2.as_ref().borrow().vertices);
-    coloring_triangle(face.clone(), colors);
+    coloring_triangle(start_face.clone(), colors);
 
     // Traverse triangulation partition recursively
     loop {
@@ -62,12 +57,14 @@ pub fn dfs(
         let half_diag =
             face_clone1.as_ref().borrow_mut().bounding_diags[unchecked_diags - 1].clone();
         let twin = half_diag.as_ref().borrow().twin.clone().unwrap().clone();
-        check_table.push((
+        half_diag_check_table.push((
             half_diag.as_ref().borrow().origin,
             half_diag.as_ref().borrow().end,
         ));
 
-        if !check_table.contains(&(twin.as_ref().borrow().origin, twin.as_ref().borrow().end)) {
+        if !half_diag_check_table
+            .contains(&(twin.as_ref().borrow().origin, twin.as_ref().borrow().end))
+        {
             dfs(
                 twin.as_ref()
                     .borrow()
@@ -75,7 +72,7 @@ pub fn dfs(
                     .clone()
                     .unwrap()
                     .clone(),
-                check_table,
+                half_diag_check_table,
                 colors,
             );
         }

@@ -1,17 +1,13 @@
-use std::collections::HashMap;
-use std::usize;
-
 use eframe::egui::*;
-use kd_tree::KdTree2;
+use kd_tree::{KdMap, KdTree2};
 use log::debug;
+use std::iter::zip;
 
 // use crate::monotone_y_partition::monoton_polygon_partition;
 use crate::monotone_triangulation::polygon_triangulation;
 use crate::monotone_y_partition::PartitionPolygon;
 use crate::transform_pos::TransformPos;
 use crate::vertex_coloring::dfs;
-
-// TODO: more detailed comments
 
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[cfg_attr(feature = "serde", serde(default))]
@@ -48,7 +44,7 @@ fn example_poly2() -> Points {
 }
 
 fn generate_point_colors(len: usize) -> Vec<Color32> {
-    vec![Color32::BLACK;len]
+    vec![Color32::BLACK; len]
 }
 pub struct Painting {
     /// in 0-1 normalized coordinates
@@ -57,13 +53,13 @@ pub struct Painting {
     polygon_partition: Vec<Points>,
     stroke: Stroke,
     radius: f32,
-    kdtree: KdTree2<[f32; 2]>,
-    focused_point: Pos2,
+    kdtree: KdMap<[f32; 2], usize>,
+    focused_point: Option<(Pos2,usize)>,
     _painting_rect: Rect,
     dcel: PartitionPolygon,
 
     // Application mode flag
-    triangulating: bool,
+    triangulated: bool,
     coloring: bool,
 }
 
@@ -72,20 +68,20 @@ impl Default for Painting {
         let points = example_poly2();
         Self {
             // points: Default::default(),
-            points: points,
+            points,
             point_colors: Vec::new(),
             polygon_partition: Vec::new(),
-            stroke: Stroke::new(1.0, Color32::from_rgb(25, 200, 100)),
+            stroke: Stroke::new(2.0, Color32::from_rgb(25, 200, 100)),
             radius: 5.,
             kdtree: KdTree2::default(),
-            focused_point: pos2(-1., -1.), // ???: Is there a better choice than (-1., -1.)
+            focused_point: None, // ???: Is there a better choice than (-1., -1.)
             _painting_rect: Rect {
                 min: Pos2::ZERO,
                 max: Pos2::ZERO,
             },
             dcel: PartitionPolygon::new(),
 
-            triangulating: false,
+            triangulated: false,
             coloring: false,
         }
     }
@@ -120,11 +116,28 @@ impl Painting {
         from_screen.inverse()
     }
 
+    fn build_kd_tree(&mut self) {
+        // self.kdtree = KdTree2::build_by_ordered_float(Vec::from_iter(
+        //     self.dcel.faces.iter().map(|face| {
+        //         let centrod = face.as_ref().borrow().centroid;
+        //         [centrod.x, centrod.y]
+        //     }),
+        // ));
+        let face_iter = Vec::from_iter(self.dcel.faces.iter().map(|face| {
+            let centrod = face.as_ref().borrow().centroid;
+            [centrod.x, centrod.y]
+        }));
+        let face_index_iter = Vec::from_iter(0..self.dcel.faces.len());
+
+        self.kdtree =
+            KdMap::build_by_ordered_float(Vec::from_iter(zip(face_iter, face_index_iter)));
+    }
+
     /// Mark the selected vertex in vertex coloring process.
     fn mark_selected_point(&mut self, p: &Painter) {
         if self.coloring {
             let bounding_box_stroke = Stroke::new(2., Color32::BLACK);
-            let focused_pt = self.to_screen() * self.focused_point;
+            let focused_pt = self.to_screen() * self.focused_point.unwrap().0;
             let rectangle = Rect {
                 max: pos2(focused_pt.x + self.radius, focused_pt.y + self.radius),
                 min: pos2(focused_pt.x - self.radius, focused_pt.y - self.radius),
@@ -138,7 +151,7 @@ impl Painting {
     /// Draw vertices spawned by Mouse click in the drawing area.
     fn draw_vertices(&mut self, p: &Painter) {
         // Draw vertices
-        let mut idx:usize = 0;
+        let mut idx: usize = 0;
         let vertices = self.points.iter().map(|point| {
             // Transpose vertex coordinate to gui's coordiante system.
             let center = self.to_screen() * *point;
@@ -185,6 +198,37 @@ impl Painting {
         }
     }
 
+    fn draw_centroid(&mut self, p: &Painter) {
+        if !self.dcel.faces.is_empty() {
+            for face in self.dcel.faces.iter() {
+                let face_clone = face.clone();
+                let centroid = self.to_screen() * face_clone.as_ref().borrow().centroid;
+
+                let bounding_box_stroke = Stroke::new(2., Color32::BLACK);
+                let rectangle = Rect {
+                    max: pos2(centroid.x + self.radius, centroid.y + self.radius),
+                    min: pos2(centroid.x - self.radius, centroid.y - self.radius),
+                };
+                let bounding_box =
+                    egui::Shape::rect_stroke(rectangle, Rounding::ZERO, bounding_box_stroke);
+                p.add(bounding_box);
+            }
+        }
+    }
+
+    fn draw_focused_point(&mut self, p: &Painter) {
+        if let Some(focused_point) = self.focused_point {
+            let centroid = self.to_screen() * focused_point.0;
+            let rectangle = Rect {
+                max: pos2(centroid.x + self.radius, centroid.y + self.radius),
+                min: pos2(centroid.x - self.radius, centroid.y - self.radius),
+            };
+            let centroid_mark =
+                egui::Shape::rect_filled(rectangle, egui::Rounding::ZERO, Color32::BLACK);
+            p.add(centroid_mark);
+        }
+    }
+
     /// Define Gui widget layout, and button click event.
     fn ui_control(&mut self, ui: &mut egui::Ui) -> egui::Response {
         ui.horizontal(|ui| {
@@ -197,54 +241,73 @@ impl Painting {
             if ui.button("Clear Painting").clicked() {
                 self.points.clear();
                 self.polygon_partition.clear();
-                self.focused_point = pos2(-1., -1.);
+                self.focused_point = None;
                 self.dcel = PartitionPolygon::new();
                 self.point_colors.clear();
-            }
-            if ui.button("Triangulate Polygon").clicked() {
-                self.triangulating = true;
-                // self.polygon_partition = monoton_polygon_partition(&self.points);
-                self.polygon_partition = polygon_triangulation(&self.points, &mut self.dcel);
-                self.triangulating = false;
-            }
-            if ui.button("3-coloring triangles").clicked() {
-                self.coloring = true;
-                self.point_colors = generate_point_colors(self.points.len());
-                let mut check_table:Vec<(usize, usize)> = Vec::new();
-                dfs(self.dcel.faces[0].clone(), &mut check_table, &mut self.point_colors);
+
+                self.triangulated = false;
                 self.coloring = false;
             }
-            if self.triangulating {
+            if ui
+                .add_enabled(!self.triangulated, egui::Button::new("Triangulate Polygon"))
+                .clicked()
+            {
+                self.triangulated = true;
+                // self.polygon_partition = monoton_polygon_partition(&self.points);
+                self.polygon_partition = polygon_triangulation(&self.points, &mut self.dcel);
+            }
+            if ui
+                .add_enabled(self.triangulated, egui::Button::new("3-coloring triangles"))
+                .clicked()
+            {
+                self.coloring = true;
+
+                // Do 3 coloring vertices
+                self.point_colors = generate_point_colors(self.points.len());
+                let start_face_idx = if None == self.focused_point {
+                    0
+                } else {
+                    self.focused_point.unwrap().1
+                };
+                let mut check_table: Vec<(usize, usize)> = Vec::new();
+                dfs(
+                    self.dcel.faces[start_face_idx].clone(),
+                    &mut check_table,
+                    &mut self.point_colors,
+                );
+            }
+
+            // Do something here
+            if self.triangulated {
                 ui.spinner();
             }
         })
         .response
     }
 
-    /// Define how to update ui content.
+    /// Update gui elements
     fn ui_content(&mut self, ui: &mut Ui) -> egui::Response {
         // TODO: more docs here.
         let (mut response, painter) =
             ui.allocate_painter(ui.available_size_before_wrap(), Sense::click());
         self._painting_rect = response.rect;
+
+        // Catch mouse click event
         if let Some(cur_pos) = response.interact_pointer_pos() {
             debug!("current cursor position:({},{})", cur_pos.x, cur_pos.y);
             // Transpose current cursor's position to conventional coordinate system.
             let current_point = self.from_screen() * cur_pos;
-            if self.coloring {
-                self.kdtree = KdTree2::build_by_ordered_float(Vec::from_iter(
-                    self.points.iter().map(|point| [point.x, point.y]),
-                ));
+
+            // Define mouse click behavior in painting area.
+            if self.triangulated {
+                self.build_kd_tree();
                 if let Some(nearest_point) =
                     self.kdtree.nearest(&[current_point.x, current_point.y])
                 {
-                    let x = nearest_point.item[0];
-                    let y = nearest_point.item[1];
-                    self.focused_point = pos2(x, y);
-                    debug!(
-                        "Focused point coordinate:({},{})",
-                        self.focused_point.x, self.focused_point.y
-                    );
+                    let [x, y] = nearest_point.item.0;
+                    let face_idx = nearest_point.item.1;
+                    self.focused_point = Some((pos2(x, y), face_idx));
+                    debug!("Focused point coordinate:({},{})", x, y);
                 }
             } else if let Some(last_point) = self.points.last() {
                 // Reject the current cursor position that is too close the last point position.
@@ -279,7 +342,9 @@ impl Painting {
         self.draw_polygon(&self.points, &painter);
         self.draw_polygon_partition(&painter);
         self.draw_vertices(&painter);
-        self.mark_selected_point(&painter);
+        self.draw_centroid(&painter);
+        // self.mark_selected_point(&painter);
+        self.draw_focused_point(&painter);
 
         response
     }
