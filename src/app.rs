@@ -14,6 +14,7 @@ use crate::vertex_coloring::dfs;
 
 type Points = Vec<Pos2>;
 
+#[allow(dead_code)]
 fn example_poly() -> Points {
     vec![
         Pos2::new(157., 29.),  // 0
@@ -54,7 +55,7 @@ pub struct Painting {
     stroke: Stroke,
     radius: f32,
     kdtree: KdMap<[f32; 2], usize>,
-    focused_point: Option<(Pos2,usize)>,
+    focused_point: Option<(Pos2, usize)>,
     _painting_rect: Rect,
     dcel: PartitionPolygon,
 
@@ -74,7 +75,7 @@ impl Default for Painting {
             stroke: Stroke::new(2.0, Color32::from_rgb(25, 200, 100)),
             radius: 5.,
             kdtree: KdTree2::default(),
-            focused_point: None, // ???: Is there a better choice than (-1., -1.)
+            focused_point: None,
             _painting_rect: Rect {
                 min: Pos2::ZERO,
                 max: Pos2::ZERO,
@@ -117,12 +118,6 @@ impl Painting {
     }
 
     fn build_kd_tree(&mut self) {
-        // self.kdtree = KdTree2::build_by_ordered_float(Vec::from_iter(
-        //     self.dcel.faces.iter().map(|face| {
-        //         let centrod = face.as_ref().borrow().centroid;
-        //         [centrod.x, centrod.y]
-        //     }),
-        // ));
         let face_iter = Vec::from_iter(self.dcel.faces.iter().map(|face| {
             let centrod = face.as_ref().borrow().centroid;
             [centrod.x, centrod.y]
@@ -131,21 +126,6 @@ impl Painting {
 
         self.kdtree =
             KdMap::build_by_ordered_float(Vec::from_iter(zip(face_iter, face_index_iter)));
-    }
-
-    /// Mark the selected vertex in vertex coloring process.
-    fn mark_selected_point(&mut self, p: &Painter) {
-        if self.coloring {
-            let bounding_box_stroke = Stroke::new(2., Color32::BLACK);
-            let focused_pt = self.to_screen() * self.focused_point.unwrap().0;
-            let rectangle = Rect {
-                max: pos2(focused_pt.x + self.radius, focused_pt.y + self.radius),
-                min: pos2(focused_pt.x - self.radius, focused_pt.y - self.radius),
-            };
-            let bounding_box =
-                egui::Shape::rect_stroke(rectangle, Rounding::ZERO, bounding_box_stroke);
-            p.add(bounding_box);
-        }
     }
 
     /// Draw vertices spawned by Mouse click in the drawing area.
@@ -238,6 +218,7 @@ impl Painting {
             ui.label("Radius");
             ui.add(DragValue::new(&mut self.radius));
             ui.separator();
+            // Clear button
             if ui.button("Clear Painting").clicked() {
                 self.points.clear();
                 self.polygon_partition.clear();
@@ -246,16 +227,19 @@ impl Painting {
                 self.point_colors.clear();
 
                 self.triangulated = false;
-                self.coloring = false;
+                self.coloring = false; // XXX: Saved for 3 color demonstration in future.
             }
-            if ui
-                .add_enabled(!self.triangulated, egui::Button::new("Triangulate Polygon"))
-                .clicked()
-            {
+            // triangle button
+            let triangle_button =
+                ui.add_enabled(!self.triangulated, egui::Button::new("Triangulate Polygon")).on_hover_ui(|ui| {
+                    ui.add(egui::widgets::Label::new("Check if the vertices in CCW order before click"));
+                });
+            if triangle_button.clicked() {
                 self.triangulated = true;
                 // self.polygon_partition = monoton_polygon_partition(&self.points);
                 self.polygon_partition = polygon_triangulation(&self.points, &mut self.dcel);
             }
+            // 3-coloring button
             if ui
                 .add_enabled(self.triangulated, egui::Button::new("3-coloring triangles"))
                 .clicked()
@@ -264,12 +248,13 @@ impl Painting {
 
                 // Do 3 coloring vertices
                 self.point_colors = generate_point_colors(self.points.len());
+                let mut check_table: Vec<(usize, usize)> = Vec::new();
                 let start_face_idx = if None == self.focused_point {
                     0
                 } else {
                     self.focused_point.unwrap().1
                 };
-                let mut check_table: Vec<(usize, usize)> = Vec::new();
+
                 dfs(
                     self.dcel.faces[start_face_idx].clone(),
                     &mut check_table,
@@ -343,7 +328,6 @@ impl Painting {
         self.draw_polygon_partition(&painter);
         self.draw_vertices(&painter);
         self.draw_centroid(&painter);
-        // self.mark_selected_point(&painter);
         self.draw_focused_point(&painter);
 
         response
@@ -357,7 +341,15 @@ impl eframe::App for Painting {
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("Painting!");
+            if self.triangulated {
+                ui.heading("Click to select a rectangle!");
+            } else {
+                ui.horizontal(|ui| {
+                    ui.heading("Click to place vertex! MUST in ");
+                    ui.heading(RichText::new("Counter Clock-Wise").strong());
+                    ui.heading("order");
+                });
+            }
             self.ui_control(ui);
             self.ui_content(ui);
         });

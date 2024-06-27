@@ -408,6 +408,7 @@ impl PartitionTree {
     }
 }
 
+/// TODO: add description here
 fn indirect_edge_compare(
     a: &PartitionTreeEntry,
     b: &PartitionVertex,

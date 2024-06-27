@@ -88,7 +88,7 @@ fn inside_mono_poly(
 }
 
 /// Triangulate monotone polygon by
-/// add new diagonals in PartitionPolygon
+/// adding new diagonals in PartitionPolygon
 fn triangulate_monotone(
     partition_poly: &mut PartitionPolygon,
     monotone_poly: &[usize],
