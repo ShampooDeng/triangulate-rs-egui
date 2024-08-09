@@ -34,18 +34,9 @@ fn which_side(idx: usize, top_vertex_idx: usize, bottom_vertex_idx: usize) -> Wh
 
     // If the index of top is less than bottom,
     // then the interval of top and bottom is on the left side of the polygon.
-    let between_top_and_bottom_is_left = if top_vertex_idx.lt(&bottom_vertex_idx) {
-        true
-    } else {
-        false
-    };
-    let between_top_and_bottom = if (idx.lt(&top_vertex_idx) && idx.lt(&bottom_vertex_idx))
-        || (idx.gt(&top_vertex_idx) && idx.gt(&bottom_vertex_idx))
-    {
-        false
-    } else {
-        true
-    };
+    let between_top_and_bottom_is_left = top_vertex_idx.lt(&bottom_vertex_idx);
+    let between_top_and_bottom = !((idx.lt(&top_vertex_idx) && idx.lt(&bottom_vertex_idx))
+        || (idx.gt(&top_vertex_idx) && idx.gt(&bottom_vertex_idx)));
 
     match (between_top_and_bottom, between_top_and_bottom_is_left) {
         (true, true) | (false, false) => WhichSide::Left,
@@ -77,14 +68,15 @@ fn inside_mono_poly(
     last: usize,
     lastlast: usize,
     side: &WhichSide,
-    vertices: &Vec<Pos2>,
+    vertices: &[Pos2],
 ) -> bool {
     let orientation = cmp_slope(&vertices[cur], &vertices[last], &vertices[lastlast]);
-    match (side, orientation) {
-        (WhichSide::Left, Orientation::ClockWise) => true,
-        (WhichSide::Right, Orientation::CounterClockWise) => true,
-        _ => false,
-    }
+    // NOTE: Use match marco to simplify expression here.
+    matches!(
+        (side, orientation),
+        (WhichSide::Left, Orientation::ClockWise)
+            | (WhichSide::Right, Orientation::CounterClockWise)
+    )
 }
 
 /// Triangulate monotone polygon by
@@ -92,7 +84,7 @@ fn inside_mono_poly(
 fn triangulate_monotone(
     partition_poly: &mut PartitionPolygon,
     monotone_poly: &[usize],
-    vertices: &Vec<Pos2>,
+    vertices: &[Pos2],
 ) {
     // Partition is already a triangle
     if monotone_poly.len() <= 3 {
@@ -120,7 +112,8 @@ fn triangulate_monotone(
 
     let mut process_stack: Vec<usize> = Vec::new();
     let top_vertex = event_stack.pop().unwrap(); // top vertex of monotone polygon
-    let bottom_vertex = event_stack.first().unwrap().clone(); // bottom vertex of monotone polygon
+    // NOTE: I can't figure out why dereference works here. 
+    let bottom_vertex = *event_stack.first().unwrap(); // bottom vertex of monotone polygon
     let mut prev_event_vertex = event_stack.pop().unwrap();
     process_stack.push(top_vertex); // push last vertex in event stack
     process_stack.push(prev_event_vertex); // push lastlast vertex in event stack
@@ -173,7 +166,7 @@ fn triangulate_monotone(
         prev_event_vertex = event_vertex;
     }
 
-    // Insert diagonals between the bottom event vertex and 
+    // Insert diagonals between the bottom event vertex and
     // all vertices left in process stack.
     let event_stack_bottom = event_stack.pop().unwrap();
     if process_stack.len() > 2 {
@@ -184,12 +177,15 @@ fn triangulate_monotone(
 }
 
 /// Triangulate all monotone polygon partititons
-pub fn polygon_triangulation(vertices: &Vec<Pos2>, mut partition_poly: &mut PartitionPolygon) -> Vec<Vec<Pos2>> {
+pub fn polygon_triangulation(
+    vertices: &Vec<Pos2>,
+    partition_poly: &mut PartitionPolygon,
+) -> Vec<Vec<Pos2>> {
     // let mut partition_poly = PartitionPolygon::new();
     partition_poly.build_from_pts(vertices);
 
     info!("---start monotone partition---");
-    monotone_partition(&mut partition_poly);
+    monotone_partition(partition_poly);
     partition_poly.sort_diagonals(vertices);
     let mut monotone_polygons: Vec<Vec<usize>> = Vec::new();
     partition_poly.make_polygons(0, &mut monotone_polygons, vertices);
@@ -198,7 +194,7 @@ pub fn polygon_triangulation(vertices: &Vec<Pos2>, mut partition_poly: &mut Part
     info!("---start triangulate monotone polygon---");
     while let Some(monotone_poly) = monotone_polygons.pop() {
         info!("processing mono polygon: {:?}", monotone_poly);
-        triangulate_monotone(&mut partition_poly, &monotone_poly, vertices);
+        triangulate_monotone(partition_poly, &monotone_poly, vertices);
     }
 
     // Generate monotone polygon partition and output coordinates

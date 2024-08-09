@@ -1,7 +1,7 @@
 use crate::triangle_base::*;
 use crate::Circulator;
 use core::panic;
-use egui::{Pos2, Color32};
+use egui::{Color32, Pos2};
 use log::{debug, info};
 use std::cell::RefCell;
 use std::cmp::Ordering;
@@ -30,7 +30,7 @@ pub struct PartitionVertex {
     pub diag_points: Vec<usize>,
     pub half_diags: Vec<Rc<RefCell<HalfDiag>>>,
     pub unused_diag_count: usize,
-    pub color: egui::Color32,
+    pub _color: egui::Color32,
 }
 
 impl PartitionVertex {
@@ -40,12 +40,12 @@ impl PartitionVertex {
             diag_points: Vec::new(),
             half_diags: Vec::new(),
             unused_diag_count: 0,
-            color: Color32::BLACK,
+            _color: Color32::BLACK,
         }
     }
 
     fn insert_diagonal(&mut self, vertex_idx: usize, half_diag: Rc<RefCell<HalfDiag>>) {
-        if let Some(_) = self.diag_points.iter().find(|&&x| x == vertex_idx) {
+        if self.diag_points.iter().any(|&x| x == vertex_idx) {
             return;
         }
         self.diag_points.push(vertex_idx);
@@ -146,7 +146,7 @@ impl Face {
     }
 
     fn calc_centroid(&mut self, coordinates: &Vertices) -> Result<(), ()> {
-        if self.vertices.len() == 0 {
+        if self.vertices.is_empty() {
             return Err(());
         }
         let mut x: f32 = 0.0;
@@ -225,7 +225,7 @@ impl PartitionPolygon {
         &mut self,
         start: usize,
         result: &mut Vec<Vec<usize>>,
-        vertices: &Vec<Pos2>,
+        _vertices: &Vec<Pos2>,
     ) -> usize {
         let mut new_polygon: Vec<usize> = Vec::new();
         let mut idx: usize = start;
@@ -242,7 +242,7 @@ impl PartitionPolygon {
                     result.push(new_polygon.clone());
                     return idx;
                 } else {
-                    idx = self.make_polygons(idx, result, vertices);
+                    idx = self.make_polygons(idx, result, _vertices);
                 }
             } else {
                 idx = (idx + 1) % self.vertices.len();
@@ -257,7 +257,7 @@ impl PartitionPolygon {
         idx
     }
 
-    fn output_coordinates(&mut self, result: &Vec<Vec<usize>>) -> Vec<Vec<Pos2>> {
+    fn output_coordinates(&mut self, result: &[Vec<usize>]) -> Vec<Vec<Pos2>> {
         let mut result_pos: Vec<Vec<Pos2>> = Vec::new();
         for parition in result.iter() {
             let partition_coordinates = parition
@@ -296,19 +296,22 @@ impl PartitionPolygon {
         self.output_coordinates(&result)
     }
 
-    fn link_face(&mut self, result: &Vec<Vec<usize>>, vertices: &Vec<Pos2>) {
+    fn link_face(&mut self, result: &[Vec<usize>], vertices: &Vec<Pos2>) {
         info!("---start link diag to face---");
         for partition in result.iter() {
             debug!("linking face{:?}", partition);
             let new_face = Face::new(partition.clone(), vertices);
             for i in 0..partition.len() {
                 let point_idx = partition[i];
-                if self.vertices[point_idx].diag_points.len() == 0 {
+                if self.vertices[point_idx].diag_points.is_empty() {
                     debug!("vertex{} has {} diagognals", point_idx, 0);
                     continue;
                 }
                 let next_point_idx = partition.next(i);
-                debug!("check vertex{} and its next vertex{}", point_idx, next_point_idx);
+                debug!(
+                    "check vertex{} and its next vertex{}",
+                    point_idx, next_point_idx
+                );
                 for half_diag in self.vertices[point_idx].half_diags.iter() {
                     if next_point_idx == half_diag.borrow().end {
                         debug!("found diag{}-{}", point_idx, next_point_idx);
@@ -421,11 +424,7 @@ fn indirect_edge_compare(
     } else {
         edge_end_x
     };
-    if most_left_vertex_x.le(&b.point.x) {
-        true
-    } else {
-        false
-    }
+    most_left_vertex_x.le(&b.point.x)
 }
 
 /// Get event vertex's left neighbor in the search tree
@@ -538,7 +537,7 @@ fn handle_regular_vertex(vertex_idx: usize, tree: &mut PartitionTree, poly: &mut
         // BUG: If a regular vertex is colinear to a neighbor end vertex,
         // then "no entry found for key" or "attempt to subtract with overflow in line 364"
         let (left_neighbor_edge_key, left_neigbor_edge_helper) =
-            get_left_neighbor(&poly.vertices[vertex_idx], tree, &poly);
+            get_left_neighbor(&poly.vertices[vertex_idx], tree, poly);
         if let VertexType::MergeVertex = monoton_vertex_type(poly, left_neigbor_edge_helper) {
             poly.insert_diagonal(vertex_idx, left_neigbor_edge_helper);
         }
@@ -548,7 +547,7 @@ fn handle_regular_vertex(vertex_idx: usize, tree: &mut PartitionTree, poly: &mut
 
 fn handle_split_vertex(vertex_idx: usize, tree: &mut PartitionTree, poly: &mut PartitionPolygon) {
     let (left_neighbor_edge_key, left_neigbor_edge_helper) =
-        get_left_neighbor(&poly.vertices[vertex_idx], tree, &poly);
+        get_left_neighbor(&poly.vertices[vertex_idx], tree, poly);
     poly.insert_diagonal(vertex_idx, left_neigbor_edge_helper);
     update_helper(left_neighbor_edge_key, vertex_idx, tree);
     tree.insert(vertex_idx, vertex_idx, poly);
@@ -563,7 +562,7 @@ fn handle_merge_vertex(vertex_idx: usize, tree: &mut PartitionTree, poly: &mut P
     }
     let _ = tree.erase(search_key);
     let (left_neighbor_edge_key, left_neigbor_edge_helper) =
-        get_left_neighbor(&poly.vertices[vertex_idx], tree, &poly);
+        get_left_neighbor(&poly.vertices[vertex_idx], tree, poly);
     if let VertexType::MergeVertex = monoton_vertex_type(poly, left_neigbor_edge_helper) {
         poly.insert_diagonal(vertex_idx, left_neigbor_edge_helper);
     }
@@ -571,31 +570,33 @@ fn handle_merge_vertex(vertex_idx: usize, tree: &mut PartitionTree, poly: &mut P
 }
 
 /// Monotone partition a polygon by inserting diagonals in PartitionPolygon
-pub fn monotone_partition(mut partition_poly: &mut PartitionPolygon) {
+/// NOTE: I can't figure out if it's the right way to define a function
+/// that requires a &mut parameter.
+pub fn monotone_partition(partition_poly: &mut PartitionPolygon) {
     let mut tree = PartitionTree::new();
     let mut event_queue = to_event_queue(&partition_poly.vertices);
     debug!("monotone partition event queue:{:?}", event_queue);
     while let Some(event_idx) = event_queue.pop() {
-        match monoton_vertex_type(&partition_poly, event_idx) {
+        match monoton_vertex_type(partition_poly, event_idx) {
             VertexType::StartVertex => {
                 info!("vertex{} is start vertex", event_idx);
-                handle_start_vertex(event_idx, &mut tree, &partition_poly);
+                handle_start_vertex(event_idx, &mut tree, partition_poly);
             }
             VertexType::EndVertex => {
                 info!("vertex{} is end vertex", event_idx);
-                handle_end_vertex(event_idx, &mut tree, &mut partition_poly);
+                handle_end_vertex(event_idx, &mut tree, partition_poly);
             }
             VertexType::RegularVetex => {
                 info!("vertex{} is regular vertex", event_idx);
-                handle_regular_vertex(event_idx, &mut tree, &mut partition_poly);
+                handle_regular_vertex(event_idx, &mut tree, partition_poly);
             }
             VertexType::SplitVertex => {
                 info!("vertex{} is split vertex", event_idx);
-                handle_split_vertex(event_idx, &mut tree, &mut partition_poly);
+                handle_split_vertex(event_idx, &mut tree, partition_poly);
             }
             VertexType::MergeVertex => {
                 info!("vertex{} is merge vertex", event_idx);
-                handle_merge_vertex(event_idx, &mut tree, &mut partition_poly);
+                handle_merge_vertex(event_idx, &mut tree, partition_poly);
             }
         }
     }
@@ -633,12 +634,12 @@ mod tests {
 
     #[test]
     fn test_build_from_pts() {
-        let mut pts = Vec::new();
-        pts.push(Pos2::new(1., 0.));
-        pts.push(Pos2::new(2., 1.));
-        pts.push(Pos2::new(2., 2.));
-        pts.push(Pos2::new(0., 1.));
-
+        let pts = vec![
+            Pos2::new(1., 0.),
+            Pos2::new(2., 1.),
+            Pos2::new(2., 2.),
+            Pos2::new(0., 1.),
+        ];
         let mut poly = PartitionPolygon::new();
         poly.build_from_pts(&pts);
         let mut gt_iter = pts.iter();
@@ -661,15 +662,15 @@ mod tests {
         |/      \/
         0        2
         */
-        let mut pts = Vec::new();
-        pts.push(Pos2::new(1., 0.));
-        pts.push(Pos2::new(2., 1.));
-        pts.push(Pos2::new(3., 0.));
-        pts.push(Pos2::new(5., 1.5));
-        pts.push(Pos2::new(3.5, 3.));
-        pts.push(Pos2::new(1.5, 1.5));
-        pts.push(Pos2::new(1., 2.4));
-
+        let pts = vec![
+            Pos2::new(1., 0.),
+            Pos2::new(2., 1.),
+            Pos2::new(3., 0.),
+            Pos2::new(5., 1.5),
+            Pos2::new(3.5, 3.),
+            Pos2::new(1.5, 1.5),
+            Pos2::new(1., 2.4),
+        ];
         let mut poly = PartitionPolygon::new();
         poly.build_from_pts(&pts);
         poly
@@ -731,13 +732,14 @@ mod tests {
         let mut partition_vertex = PartitionVertex::new(&Pos2::new(10., 10.));
         partition_vertex.diag_points = (0..6).collect();
         let next = Pos2::new(12., 8.);
-        let mut vertices = Vec::new();
-        vertices.push(Pos2::new(6., 7.));
-        vertices.push(Pos2::new(4., 15.));
-        vertices.push(Pos2::new(2., 10.));
-        vertices.push(Pos2::new(10., 20.));
-        vertices.push(Pos2::new(15., 10.));
-        vertices.push(Pos2::new(8., 18.));
+        let vertices = vec![
+            Pos2::new(6., 7.),
+            Pos2::new(4., 15.),
+            Pos2::new(2., 10.),
+            Pos2::new(10., 20.),
+            Pos2::new(15., 10.),
+            Pos2::new(8., 18.),
+        ];
         partition_vertex.sort_diag(&next, &vertices);
         let res = partition_vertex.diag_points;
         let gts = vec![4, 3, 5, 1, 2, 0];
@@ -746,14 +748,15 @@ mod tests {
 
     #[test]
     fn test_monotone_partition() {
-        let mut pts = Vec::new();
-        pts.push(Pos2::new(157., 29.)); // 0
-        pts.push(Pos2::new(308., 173.)); // 1
-        pts.push(Pos2::new(481., 49.)); // 2
-        pts.push(Pos2::new(624., 180.)); // 3
-        pts.push(Pos2::new(500., 349.)); // 4
-        pts.push(Pos2::new(378., 286.)); // 5
-        pts.push(Pos2::new(185., 333.)); // 6
+        let pts = vec![
+            Pos2::new(157., 29.),
+            Pos2::new(308., 173.),
+            Pos2::new(481., 49.),
+            Pos2::new(624., 180.),
+            Pos2::new(500., 349.),
+            Pos2::new(378., 286.),
+            Pos2::new(185., 333.),
+        ];
         let result = monotone_polygon_partition(&pts);
         // assert_eq!(result[0], Vec::new());
         // assert_eq!(result[1], Vec::new());

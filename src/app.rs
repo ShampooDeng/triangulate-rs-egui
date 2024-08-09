@@ -9,8 +9,8 @@ use crate::monotone_y_partition::PartitionPolygon;
 use crate::transform_pos::TransformPos;
 use crate::vertex_coloring::dfs;
 
-#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-#[cfg_attr(feature = "serde", serde(default))]
+// #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+// #[cfg_attr(feature = "serde", serde(default))]
 
 type Points = Vec<Pos2>;
 
@@ -107,12 +107,12 @@ impl Painting {
     /// Gui's coordinate system has its origin in the top left corner, while
     /// conventional coordiante system's origin rests in the lower left corner,
     /// which is more intuitive and easier to handle.
-    fn from_screen(&self) -> TransformPos {
+    fn transpose_from_screen(&self) -> TransformPos {
         TransformPos::new(vec2(0., self._painting_rect.size().y), vec2(1., -1.))
     }
 
     /// Transpose coordinates from conventional coordinate system to gui's coordinate system.
-    fn to_screen(&self) -> TransformPos {
+    fn transpose_to_screen(&self) -> TransformPos {
         let from_screen = TransformPos::new(vec2(0., self._painting_rect.size().y), vec2(1., -1.));
         from_screen.inverse()
     }
@@ -134,7 +134,7 @@ impl Painting {
         let mut idx: usize = 0;
         let vertices = self.points.iter().map(|point| {
             // Transpose vertex coordinate to gui's coordiante system.
-            let center = self.to_screen() * *point;
+            let center = self.transpose_to_screen() * *point;
             let ret = if self.point_colors.is_empty() {
                 egui::Shape::circle_filled(center, self.radius, Color32::BLACK)
             } else {
@@ -148,7 +148,7 @@ impl Painting {
         // Add number to lower right corner of the vertex
         for i in 0..self.points.len() {
             let font_id = egui::FontId::new(15., FontFamily::Monospace);
-            let pt = self.to_screen() * self.points[i];
+            let pt = self.transpose_to_screen() * self.points[i];
             let pos = pos2(pt.x + self.radius, pt.y + self.radius);
             let text = i.to_string();
             p.text(pos, Align2::LEFT_TOP, text, font_id, Color32::RED);
@@ -159,11 +159,11 @@ impl Painting {
         let mut points = pts
             .iter()
             // Transpose vertex coordinate to gui's coordiante system.
-            .map(|point| self.to_screen() * *point)
+            .map(|point| self.transpose_to_screen() * *point)
             .collect::<Vec<Pos2>>();
         // Join the last vertex and the first vertex to seal the polygon.
         if self.points.len() > 2 {
-            points.push(self.to_screen() * pts[0]);
+            points.push(self.transpose_to_screen() * pts[0]);
         }
         let polygon_outline = Shape::line(points, self.stroke);
         p.add(polygon_outline);
@@ -182,7 +182,7 @@ impl Painting {
         if !self.dcel.faces.is_empty() {
             for face in self.dcel.faces.iter() {
                 let face_clone = face.clone();
-                let centroid = self.to_screen() * face_clone.as_ref().borrow().centroid;
+                let centroid = self.transpose_to_screen() * face_clone.as_ref().borrow().centroid;
 
                 let bounding_box_stroke = Stroke::new(2., Color32::BLACK);
                 let rectangle = Rect {
@@ -198,7 +198,7 @@ impl Painting {
 
     fn draw_focused_point(&mut self, p: &Painter) {
         if let Some(focused_point) = self.focused_point {
-            let centroid = self.to_screen() * focused_point.0;
+            let centroid = self.transpose_to_screen() * focused_point.0;
             let rectangle = Rect {
                 max: pos2(centroid.x + self.radius, centroid.y + self.radius),
                 min: pos2(centroid.x - self.radius, centroid.y - self.radius),
@@ -249,7 +249,7 @@ impl Painting {
                 // Do 3 coloring vertices
                 self.point_colors = generate_point_colors(self.points.len());
                 let mut check_table: Vec<(usize, usize)> = Vec::new();
-                let start_face_idx = if None == self.focused_point {
+                let start_face_idx = if self.focused_point.is_none() {
                     0
                 } else {
                     self.focused_point.unwrap().1
@@ -281,7 +281,7 @@ impl Painting {
         if let Some(cur_pos) = response.interact_pointer_pos() {
             debug!("current cursor position:({},{})", cur_pos.x, cur_pos.y);
             // Transpose current cursor's position to conventional coordinate system.
-            let current_point = self.from_screen() * cur_pos;
+            let current_point = self.transpose_from_screen() * cur_pos;
 
             // Define mouse click behavior in painting area.
             if self.triangulated {
