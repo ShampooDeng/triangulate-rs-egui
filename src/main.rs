@@ -5,7 +5,7 @@
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
     let options = eframe::NativeOptions {
-        renderer: eframe::Renderer::Glow,
+        viewport: egui::ViewportBuilder::default(),
         ..Default::default()
     };
     eframe::run_native(
