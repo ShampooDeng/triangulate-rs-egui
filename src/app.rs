@@ -213,7 +213,7 @@ impl Painting {
     fn ui_control(&mut self, ui: &mut egui::Ui) -> egui::Response {
         ui.horizontal(|ui| {
             ui.label("Stroke:");
-            egui::stroke_ui(ui, &mut self.stroke, "preview");
+            ui.add(&mut self.stroke);
             ui.separator();
             ui.label("Radius");
             ui.add(DragValue::new(&mut self.radius));
@@ -227,7 +227,7 @@ impl Painting {
                 self.point_colors.clear();
 
                 self.triangulated = false;
-                self.coloring = false; // XXX: Saved for 3 color demonstration in future.
+                self.coloring = false;
             }
             // triangle button
             let triangle_button =

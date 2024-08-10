@@ -11,7 +11,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     eframe::run_native(
         "egui painting plate",
         options,
-        Box::new(|_cc| Box::<triangulate_rs::Painting>::default()),
+        Box::new(|_cc| Ok(Box::<triangulate_rs::Painting>::default())),
     )?;
     Ok(())
 }
