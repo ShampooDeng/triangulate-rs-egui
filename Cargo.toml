@@ -12,6 +12,8 @@ all-features = true
 
 [dependencies]
 egui = "0.28"
+egui_extras = { version ="*", features = ["all_loaders"] }
+image = { version = "0.25", features = ["gif"] }
 eframe = { version = "0.28", default-features = false, features = [
     "accesskit",     # Make egui comptaible with screen readers. NOTE: adds a lot of dependencies.
     "default_fonts", # Embed the default egui fonts.
