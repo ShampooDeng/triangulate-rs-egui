@@ -3,7 +3,7 @@ use egui::Color32;
 use log::debug;
 use std::{cell::RefCell, rc::Rc};
 
-fn coloring_triangle(face: Rc<RefCell<Face>>, colors: &mut Vec<Color32>) {
+fn coloring_triangle(face: Rc<RefCell<Face>>, colors: &mut [Color32]) {
     let mut red_avaiable = true;
     let mut green_avaiable = true;
     let mut blue_avaiable = true;
@@ -78,6 +78,4 @@ pub fn dfs(
         }
         unchecked_diags -= 1;
     }
-
-    return;
 }
