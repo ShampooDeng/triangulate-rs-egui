@@ -1,6 +1,6 @@
 [package]
 name = "triangulate_rs"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Shampoo Deng <lwxkkdy@foxmail.com>"]
 edition = "2021"
 include = ["LICENSE-APACHE", "LICENSE-MIT", "**/*.rs", "Cargo.toml"]
