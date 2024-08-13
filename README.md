@@ -4,8 +4,6 @@ This repository is a fork of [eframe_template](https://deps.rs/repo/github/emilk
 
 The goal is to accomplish the task of my Computational Geometry course solely with rust.
 
-This project is still working in progress, ^w^.
-
 [Screencast from 2024-08-13 13-08-52.webm](https://github.com/user-attachments/assets/44a11041-c5c5-4cd4-ac0d-10d613dc3be4)
 
 ## Feature
@@ -66,20 +64,6 @@ Once the simple polygon is triangulated, one can use a data structure similar to
 
 Data inside DCEL might needs to be shared and mutable simultaneously, which will be hard to implement with Rust.
 The way I do it is simply build a DCEL after the triangulation, basically build a static DCEL for the purpose of coloring vertices. In that way, I don't have to maintain a valid DCEL during the process polygon triangulation. Please go to [monotone_y_partition](src/monotone_y_partition.rs) for more details.
-
-## Todo
-
-* [x] design polygon with mouse click
-* [x] implement monotone partition
-* [x] implement polygon triangulate algorithm
-* [x] implement 3-coloring painting algorithm
-* [x] output log while debugging the app
-* [ ] ~~illustrate the process of `triangulate algorithm` step by step~~
-* [x] better ui experience
-  * [x] show operation hint, like warning, suggestion, etc.
-  * [ ] ~~show current on-going process~~
-  * [x] add acknowledgement page for the app
-  * [ ] ~~add a Genshin(OvO) icon on acknowledgement page~~
 
 ## Thanks💖
 
