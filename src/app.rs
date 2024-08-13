@@ -236,9 +236,12 @@ impl Painting {
                 self.coloring = false;
             }
             // triangle button
-            let triangle_button =
-                ui.add_enabled(!self.triangulated, egui::Button::new("Triangulate Polygon")).on_hover_ui(|ui| {
-                    ui.add(egui::widgets::Label::new("Check if the vertices in CCW order before click"));
+            let triangle_button = ui
+                .add_enabled(!self.triangulated, egui::Button::new("Triangulate Polygon"))
+                .on_hover_ui(|ui| {
+                    ui.add(egui::widgets::Label::new(
+                        "Check if the vertices in CCW order before click",
+                    ));
                 });
             if triangle_button.clicked() {
                 self.triangulated = true;
@@ -339,15 +342,17 @@ impl Painting {
         response
     }
 
-    fn render_about_page(&mut self,ctx:&egui::Context){
+    fn render_about_page(&mut self, ctx: &egui::Context) {
         if !self.show_immediate_about_page {
-            return ;
+            return;
         }
 
+        // TODO: Is a there a easy way to only set font size for "about" page.
         ctx.show_viewport_immediate(
             egui::ViewportId::from_hash_of("About"),
             egui::ViewportBuilder::default()
-                .with_inner_size([400.,600.])
+                .with_resizable(false)
+                .with_inner_size([500.,300.])
                 .with_title("About"),
             |ctx, class| {
                 assert!(
@@ -356,11 +361,27 @@ impl Painting {
                 );
                 egui::CentralPanel::default().show(ctx, |ui| {
                     ui.vertical_centered(|ui| {
-                        ui.label("Hello from About page");
+                        ui.strong("Triangulate-rs-egui");
+                        ui.label("0.2.0");
+                        ui.label("A polygon triangulation demonstration app based on egui, a rust gui framework.");
+
                         install_image_loaders(ctx);
                         // The path in include_image will be resolved at 
                         // compile-time and embedded in the binary. 
-                        ui.image(egui::include_image!("../assets/dadparrot.gif"));
+                        // ui.image(egui::include_image!("../assets/dadparrot.gif"));
+                        ui.add(egui::Image::new(
+                                egui::include_image!("../assets/tripletsparrot.gif")
+                            ).max_width(100.)
+                            .rounding(20.)
+                        );
+
+                        ui.label("Created by:");
+                        ui.strong("ShampooDeng <lwxkkdy@foxmail.com>");
+
+                        ui.label("Report a issue:");
+                        use egui::special_emojis::GITHUB;
+                        ui.hyperlink_to(format!("{GITHUB}triangulate-rs-egui"), 
+                            "https://github.com/ShampooDeng/triangulate-rs-egui/issues");
                     })
                 });
 
@@ -378,8 +399,6 @@ impl eframe::App for Painting {
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 egui::widgets::global_dark_light_mode_buttons(ui);
-                // TODO: add about page for app
-                // https://github.com/ShampooDeng/triangulate-rs-egui/issues/14
                 if ui.button("About").clicked() {
                     self.show_immediate_about_page = true;
                 }
