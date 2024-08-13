@@ -6,6 +6,8 @@ The goal is to accomplish the task of my Computational Geometry course solely wi
 
 This project is still working in progress, ^w^.
 
+[Screencast from 2024-08-13 13-08-52.webm](https://github.com/user-attachments/assets/44a11041-c5c5-4cd4-ac0d-10d613dc3be4)
+
 ## Feature
 
 * design polygon with mouse click
