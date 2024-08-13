@@ -1,4 +1,5 @@
 use eframe::egui::*;
+use egui_extras::install_image_loaders;
 use kd_tree::{KdMap, KdTree2};
 use log::debug;
 use std::iter::zip;
@@ -62,6 +63,9 @@ pub struct Painting {
     // Application mode flag
     triangulated: bool,
     coloring: bool,
+
+    // "about" page  window flag
+    show_immediate_about_page: bool,
 }
 
 impl Default for Painting {
@@ -84,6 +88,8 @@ impl Default for Painting {
 
             triangulated: false,
             coloring: false,
+
+            show_immediate_about_page: false,
         }
     }
 }
@@ -213,7 +219,7 @@ impl Painting {
     fn ui_control(&mut self, ui: &mut egui::Ui) -> egui::Response {
         ui.horizontal(|ui| {
             ui.label("Stroke:");
-            egui::stroke_ui(ui, &mut self.stroke, "preview");
+            ui.add(&mut self.stroke);
             ui.separator();
             ui.label("Radius");
             ui.add(DragValue::new(&mut self.radius));
@@ -227,12 +233,15 @@ impl Painting {
                 self.point_colors.clear();
 
                 self.triangulated = false;
-                self.coloring = false; // XXX: Saved for 3 color demonstration in future.
+                self.coloring = false;
             }
             // triangle button
-            let triangle_button =
-                ui.add_enabled(!self.triangulated, egui::Button::new("Triangulate Polygon")).on_hover_ui(|ui| {
-                    ui.add(egui::widgets::Label::new("Check if the vertices in CCW order before click"));
+            let triangle_button = ui
+                .add_enabled(!self.triangulated, egui::Button::new("Triangulate Polygon"))
+                .on_hover_ui(|ui| {
+                    ui.add(egui::widgets::Label::new(
+                        "Check if the vertices in CCW order before click",
+                    ));
                 });
             if triangle_button.clicked() {
                 self.triangulated = true;
@@ -332,12 +341,69 @@ impl Painting {
 
         response
     }
+
+    fn render_about_page(&mut self, ctx: &egui::Context) {
+        if !self.show_immediate_about_page {
+            return;
+        }
+
+        // TODO: Is a there a easy way to only set font size for "about" page.
+        ctx.show_viewport_immediate(
+            egui::ViewportId::from_hash_of("About"),
+            egui::ViewportBuilder::default()
+                .with_resizable(false)
+                .with_inner_size([500.,300.])
+                .with_title("About"),
+            |ctx, class| {
+                assert!(
+                    class == egui::ViewportClass::Immediate,
+                    "Current backend dones't support multiple viewport"
+                );
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    ui.vertical_centered(|ui| {
+                        ui.strong("Triangulate-rs-egui");
+                        ui.label("0.2.0");
+                        ui.label("A polygon triangulation demonstration app based on egui, a rust gui framework.");
+
+                        install_image_loaders(ctx);
+                        // The path in include_image will be resolved at 
+                        // compile-time and embedded in the binary. 
+                        // ui.image(egui::include_image!("../assets/dadparrot.gif"));
+                        ui.add(egui::Image::new(
+                                egui::include_image!("../assets/tripletsparrot.gif")
+                            ).max_width(100.)
+                            .rounding(20.)
+                        );
+
+                        ui.label("Created by:");
+                        ui.strong("ShampooDeng <lwxkkdy@foxmail.com>");
+
+                        ui.label("Report a issue:");
+                        use egui::special_emojis::GITHUB;
+                        ui.hyperlink_to(format!("{GITHUB}triangulate-rs-egui"), 
+                            "https://github.com/ShampooDeng/triangulate-rs-egui/issues");
+                    })
+                });
+
+                if ctx.input(|i| i.viewport().close_requested()) {
+                    // Tell parent viewport that we should not show next frame:
+                    self.show_immediate_about_page = false;
+                }
+            }
+        );
+    }
 }
 
 impl eframe::App for Painting {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
-            egui::widgets::global_dark_light_mode_buttons(ui);
+            ui.horizontal(|ui| {
+                egui::widgets::global_dark_light_mode_buttons(ui);
+                if ui.button("About").clicked() {
+                    self.show_immediate_about_page = true;
+                }
+            });
+            self.render_about_page(ctx);
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {

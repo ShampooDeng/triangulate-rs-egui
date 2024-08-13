@@ -11,8 +11,10 @@ all-features = true
 # targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-egui = "0.27.2"
-eframe = { version = "0.27.2", default-features = false, features = [
+egui = "0.28"
+egui_extras = { version ="*", features = ["all_loaders"] }
+image = { version = "0.25", features = ["gif"] }
+eframe = { version = "0.28", default-features = false, features = [
     "accesskit",     # Make egui comptaible with screen readers. NOTE: adds a lot of dependencies.
     "default_fonts", # Embed the default egui fonts.
     "glow",          # Use the glow rendering backend. Alternative: "wgpu".
@@ -26,7 +28,7 @@ serde = { version = "1", features = ["derive"] }
 
 # native:
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-env_logger = "0.11.3"
+env_logger = "0.11"
 
 # web:
 # [target.'cfg(target_arch = "wasm32")'.dependencies]

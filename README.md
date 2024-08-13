@@ -27,7 +27,7 @@ cargo build --release
 
 ## Technical details
 
->How to select a triangle partition inside polygon with mouse click?
+**How to select a triangle partition inside polygon with mouse click?**
 
 The coordinates of a triangle's centroid can be stored in an ordered data structure, KD-Tree.
 One can find a nearest vertex around the cursor by searching the nearest children with respect to cursor position in the KD-Tree.
@@ -39,13 +39,13 @@ Any available solution?
 
 This is feature is actually implemented with crate kd-tree, see [app.rs](src/app.rs) for more details.
 
->How to partition a simple polygon into monotone ones?
+**How to partition a simple polygon into monotone ones?**
 
 [cgal](https://github.com/CGAL/cgal/blob/master/Partition_2/include/CGAL/Partition_2/partition_y_monotone_2.h) provides an implementation of monotone partition using sweep-line algorithm.
 
 I've rewrite cgal's implementation in rust, see [triangulate_2.rs](src/triangulate_2.rs) for more details.
 
->Which polygon triangulate algorithm to implement?
+**Which polygon triangulate algorithm to implement?**
 
 There are ear-clip and sweep-line algorithm for polygon triangulation.
 However, I only focus on sweep-line algorithm (because that's what I'm required to do :D).
@@ -56,11 +56,12 @@ The whole process will be:
 
 * [polygon triangulation on wikipedia](https://en.wikipedia.org/wiki/Polygon_triangulation)
 
->How to implement 3-coloring algorithm?
+**How to implement 3-coloring algorithm?**
 
 Once the simple polygon is triangulated, one can use a data structure similar to [Doubly-Connected-Edge-List(DCEL)](https://www.cs.umd.edu/class/spring2020/cmsc754/Lects/lect10-dcel.pdf) to store a triangle's adjacencies, which will eventually result in a graph-like result(neighboring triangles faces are linked by their shared edges). After that, a vertex 3-coloring result can be derived by determine the vertex color of the startup triangle and then traversing triangle faces in the DCEL in a DFS manner.
 
->How to implement DCEL with rust?
+**How to implement DCEL with rust?**
+
 Data inside DCEL might needs to be shared and mutable simultaneously, which will be hard to implement with Rust.
 The way I do it is simply build a DCEL after the triangulation, basically build a static DCEL for the purpose of coloring vertices. In that way, I don't have to maintain a valid DCEL during the process polygon triangulation. Please go to [monotone_y_partition](src/monotone_y_partition.rs) for more details.
 
@@ -72,11 +73,11 @@ The way I do it is simply build a DCEL after the triangulation, basically build 
 * [x] implement 3-coloring painting algorithm
 * [x] output log while debugging the app
 * [ ] ~~illustrate the process of `triangulate algorithm` step by step~~
-* [ ] better ui experience
+* [x] better ui experience
   * [x] show operation hint, like warning, suggestion, etc.
   * [ ] ~~show current on-going process~~
-  * [ ] add acknowledgement page for the app
-  * [ ] add a Genshin(OvO) icon on acknowledgement page
+  * [x] add acknowledgement page for the app
+  * [ ] ~~add a Genshin(OvO) icon on acknowledgement page~~
 
 ## Thanks💖
 

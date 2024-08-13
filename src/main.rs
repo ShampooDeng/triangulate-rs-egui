@@ -5,13 +5,13 @@
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
     let options = eframe::NativeOptions {
-        renderer: eframe::Renderer::Glow,
+        viewport: egui::ViewportBuilder::default(),
         ..Default::default()
     };
     eframe::run_native(
         "egui painting plate",
         options,
-        Box::new(|_cc| Box::<triangulate_rs::Painting>::default()),
+        Box::new(|_cc| Ok(Box::<triangulate_rs::Painting>::default())),
     )?;
     Ok(())
 }
