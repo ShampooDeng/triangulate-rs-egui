@@ -281,7 +281,6 @@ impl Painting {
 
     /// Update gui elements
     fn ui_content(&mut self, ui: &mut Ui) -> egui::Response {
-        // TODO: more docs here.
         let (mut response, painter) =
             ui.allocate_painter(ui.available_size_before_wrap(), Sense::click());
         self._painting_rect = response.rect;
@@ -342,6 +341,7 @@ impl Painting {
         response
     }
 
+    /// Draw ui content of the About page.
     fn render_about_page(&mut self, ctx: &egui::Context) {
         if !self.show_immediate_about_page {
             return;

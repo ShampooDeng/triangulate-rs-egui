@@ -411,7 +411,7 @@ impl PartitionTree {
     }
 }
 
-/// TODO: add description here
+/// Compare the x coordinate of the most left vertex of a line with a vertex.
 fn indirect_edge_compare(
     a: &PartitionTreeEntry,
     b: &PartitionVertex,
