@@ -112,7 +112,7 @@ fn triangulate_monotone(
 
     let mut process_stack: Vec<usize> = Vec::new();
     let top_vertex = event_stack.pop().unwrap(); // top vertex of monotone polygon
-    // NOTE: I can't figure out why dereference works here. 
+    // NOTE: I can't figure out why dereference works here.
     let bottom_vertex = *event_stack.first().unwrap(); // bottom vertex of monotone polygon
     let mut prev_event_vertex = event_stack.pop().unwrap();
     process_stack.push(top_vertex); // push last vertex in event stack

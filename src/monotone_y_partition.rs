@@ -603,6 +603,7 @@ pub fn monotone_partition(partition_poly: &mut PartitionPolygon) {
 }
 
 /// Monotone partition a polygon and output partitions' vertices coordinates.
+#[allow(dead_code)]
 pub fn monotone_polygon_partition(vertices: &Vec<Pos2>) -> Vec<Vec<Pos2>> {
     let mut partition_poly = PartitionPolygon::new();
     // let vertices_rc = vertices.iter().map(|x| Rc::new(x.clone()));
